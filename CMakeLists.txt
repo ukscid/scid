@@ -40,7 +40,6 @@ if(MSVC)
   # Environment:       PATH=C:\tcl\bin
 endif()
 
-
 # polyglot
 file(GLOB POLYGLOT_SRC src/polyglot/*.cpp)
 add_library(polyglot ${POLYGLOT_SRC})
@@ -55,6 +54,13 @@ else()
 endif()
 set_property(TARGET scid PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
+# find_package(RocksDB CONFIG REQUIRED)
+find_package(LZ4)
+set(WITH_LZ4 ON CACHE BOOL "")
+set(WITH_GFLAGS OFF CACHE BOOL "")
+add_subdirectory(${CMAKE_BINARY_DIR}/rocksdb)
+target_include_directories(scid PRIVATE ${CMAKE_BINARY_DIR}/rocksdb/include)
+target_link_libraries(scid rocksdb)
 
 option(SCID_MULTITHREADING "Enable/disable multihreading" ON)
 if(SCID_MULTITHREADING)

@@ -25,6 +25,9 @@
 #define CODEC_MEMORY_H
 
 #include "codec_native.h"
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/slice.h"
 
 /**
  * Manages memory databases that do not have associated files.
@@ -32,7 +35,9 @@
  * this requirement non-native codecs should be derived from this class.
  */
 class CodecMemory : public CodecNative<CodecMemory> {
-	VectorChunked<byte, 24> v_;
+	rocksdb::DB* db_ = nullptr;
+	rocksdb::PinnableSlice slice_;
+	unsigned long long offset_ = 0;
 	unsigned baseType_ = 0;
 
 	enum : uint64_t {
@@ -42,6 +47,9 @@ class CodecMemory : public CodecNative<CodecMemory> {
 		LIMIT_UNIQUENAMES = 1ULL << 28,
 		LIMIT_NAMELEN = 255
 	};
+
+public:
+	~CodecMemory() { delete db_; }
 
 public: // ICodecDatabase interface
 	Codec getType() const override { return ICodecDatabase::MEMORY; }
@@ -66,10 +74,10 @@ public: // ICodecDatabase interface
 	}
 
 	const byte* getGameData(uint64_t offset, uint32_t length) override {
-		ASSERT(offset < v_.size());
-		ASSERT(length <= v_.size() - offset);
-		ASSERT(v_.contiguous(static_cast<size_t>(offset)) >= length);
-		return &v_[offset];
+
+		db_->Get(rocksdb::ReadOptions(), db_->DefaultColumnFamily(),
+		         std::to_string(offset), &slice_);
+		return (const byte*)slice_.ToStringView().data();
 	}
 
 	errorT saveIndexEntry(const IndexEntry& ie, gamenumT replaced) override {
@@ -90,6 +98,22 @@ public: // ICodecDatabase interface
 			return ERROR;
 		idx_ = idx;
 		nb_ = nb;
+
+		rocksdb::Options options;
+		// Optimize RocksDB. This is the easiest way to get RocksDB to perform
+		// well
+		options.IncreaseParallelism();
+		options.compression = rocksdb::kLZ4Compression;
+//		options.OptimizeLevelStyleCompaction();
+		// create the DB if it's not already present
+		options.create_if_missing = true;
+
+		static int db_counter = 0;
+		auto db_name = "kDBPath" + std::to_string(db_counter++);
+
+		rocksdb::Status s = rocksdb::DB::Open(options, db_name.c_str(), &db_);
+		assert(s.ok());
+
 		return OK;
 	}
 
@@ -111,17 +135,9 @@ public: // CodecNative CRTP
 		if (length >= LIMIT_GAMELEN)
 			return std::make_pair(ERROR_GameLengthLimit, 0);
 
-		auto offset = v_.size();
-		auto capacity = v_.capacity();
-		if (capacity - offset < length) // Doesn't fit in the current chunk
-			offset = capacity;
-		if (offset >= LIMIT_GAMEOFFSET)
-			return std::make_pair(ERROR_OffsetLimit, 0);
-
-		v_.resize(offset + length);
-		ASSERT(v_.contiguous(offset) >= length);
-		std::copy_n(src, length, &v_[offset]);
-		return {OK, offset};
+		std::string_view data((const char*)src, length);
+		db_->Put(rocksdb::WriteOptions(), std::to_string(++offset_), data);
+		return {OK, offset_};
 	}
 
 	/**
