@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+// This message is sent from the engine
+// after a successfull connection (local or remote)
+// or in response to a SetOptions message
+// or when network client is accepted
+// or when a network client disconnects.
+message InfoConfig {
+  string name = 1;
+  string exe_or_ip = 3;
+  string exe_args = 4;
+  string net_port_accept = 5;
+
+  enum Protocol {
+    uci = 0;
+    xboard2 = 1;
+    xboard = 2;
+  }
+  Protocol protocol = 1;
+
+  repeated string net_clients = 2;
+
+  enum OptionType {
+    text = 1;
+    file = 2;
+    path = 3;
+    spin = 4;
+    slider = 5;
+    check = 6;
+    combo = 7;
+    button = 8;
+    save = 9;
+    reset = 10;
+  }
+  message Option {
+    string name = 1;
+    string value = 2;
+    OptionType type = 3 [default = text];
+    string default = 4;
+    int32 min = 5;
+    int32 max = 6;
+    repeated string var = 7;
+    bool internal = 8 [default = false];
+  }
+  repeated Option options = 3;
+}
+
+// Sent to the engine to change the value of one or more options.
+// The engine will reply with an InfoConfig message.
+message SetOptions {
+  message Option {
+    string name = 1;
+    string value = 2;
+  }
+  repeated Option options = 1;
+}
+
+// Sent to the engine to signal a new game or analysis and to specify
+// the desired thinking output.
+// The engine will reply with a InfoReady message.
+message NewGame {
+  enum Option {
+    analysis = 1;
+    ponder = 2;
+    chess960 = 3;
+    post_pv = 4;
+    post_currmove = 5;
+    post_wdl = 6;
+  }
+  repeated Option options = 1;
+}
+
+// Sent from the engine in response to a NewGame and a StopGo message.
+message InfoReady {
+}
+
+// Sent to the engine to ask it to start thinking.
+// The engine will reply immediately with an empty InfoPV.
+// Other InfoPV messages will be sent if the last NewGame included "post_pv".
+message Go {
+  string position = 1;
+
+  enum LimitType {
+    wtime = 1;
+    btime = 2;
+    winc = 3;
+    binc = 4;
+    movestogo = 5;
+    movetime = 6;
+    depth = 7;
+    nodes = 8;
+    mate = 9;
+  }
+  message Limit {
+    LimitType limit = 1;
+    uint32 value = 2;
+  }
+  repeated Limit limits = 2;
+}
+
+// Sent repeatedly from the engine after a Go message.
+message InfoPV {
+  int32 multipv = 1;
+  int32 depth = 1;
+  int32 seldepth = 1;
+  int32 nodes = 1;
+  int32 nps = 1;
+  int32 hashfull = 1;
+  int32 tbhits = 1;
+  int32 time = 1;
+  int32 score = 1;
+  string score_type = 1;
+  repeated int32 score_wdl = 1;
+  string pv = 1;
+}
+
+// Sent to the engine to ask it to interrupt a previous Go message.
+// The engine will reply with a InfoReady message.
+message StopGo {
+}
+
+// Sent from the engine as the final reply to an uninterrupted Go message.
+message BestMove {
+  string move = 1;
+  string claim_result = 2;
+}
+
+// Sent from the engine to local controller
+message Disconnected {
+}
