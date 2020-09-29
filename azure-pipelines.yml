@@ -72,8 +72,9 @@ jobs:
       call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
       git clone --depth=1 https://github.com/official-stockfish/Stockfish.git stockfish
       cd stockfish\src
-      cl /DNDEBUG /DUSE_POPCNT /GS- /MT /O2 /Oi /Ot /Oy /GL *.cpp syzygy/*.cpp /link /STACK:reserve=8388608 /OUT:stockfish.exe advapi32.lib
+      cl /std:c++latest /DNDEBUG /DUSE_POPCNT /GS- /MT /O2 /Oi /Ot /Oy /GL /EHsc *.cpp nnue/*.cpp nnue/features/*.cpp syzygy/*.cpp /link /STACK:reserve=8388608 /OUT:stockfish.exe advapi32.lib
       copy stockfish.exe $(Build.SourcesDirectory)\install\bin
+      curl -o $(Build.SourcesDirectory)\install\bin\nn-62ef826d1a6d.nnue https://tests.stockfishchess.org/api/nn/nn-62ef826d1a6d.nnue
     displayName: Generate stockfish
   - script: |
       move bin engines
