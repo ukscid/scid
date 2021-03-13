@@ -16,6 +16,8 @@
 #ifndef SCID_GAME_H
 #define SCID_GAME_H
 
+#include "codec.h"
+
 #include "common.h"
 #include "date.h"
 #include "indexentry.h"
@@ -449,7 +451,7 @@ public:
     errorT    Encode(std::vector<byte>& dest, IndexEntry& ie) const;
     errorT    DecodeSkipTags(ByteBuffer* buf);
     errorT    DecodeNextMove (ByteBuffer * buf, simpleMoveT& sm);
-    errorT    Decode(ByteBuffer& buf);
+    errorT    Decode(IndexEntry const& ie, NameBase const& nb, GameData const& data);
     errorT    DecodeMovesOnly(ByteBuffer& buf);
 
     Game* clone();

@@ -3099,22 +3099,31 @@ errorT Game::DecodeMovesOnly(ByteBuffer& buf) {
 	return DecodeVariation(buf);
 }
 
+
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Game::Decode():
 //      Decodes a game from its on-disk representation in a bytebuffer.
 //      Decodes all the information: comments, variations, non-standard
 //      tags, etc.
 //
-errorT Game::Decode(ByteBuffer& buf) {
+errorT Game::Decode(const IndexEntry& ie, const NameBase& nb, GameData const& data) {
     Clear();
+    LoadStandardTags(&ie, &nb);
 
-    errorT err = buf.decodeTags([&](const auto& tag, const auto& value) {
-        accessTagValue(tag.data(), tag.size()).assign(value);
-    });
+    errorT err = OK;
+    // errorT err = text.decodeTags([&](auto tag, auto value) {
+    //     accessTagValue(tag.data(), tag.size()).assign(value);
+    // });
     if (err)
         return err;
+    for (size_t i = 0; i < data.nTags; i += 2) {
+            auto const& tag = data.tags[i];
+        accessTagValue(tag.data(), tag.size()).assign(data.tags[i+i]);
+    }
 
-    const auto [err_startpos, fen] = buf.decodeStartBoard();
+    ByteBuffer game(data.game, data.gameLen);
+    const auto [err_startpos, fen] = game.decodeStartBoard();
     if (err_startpos)
         return err_startpos;
 
@@ -3122,10 +3131,12 @@ errorT Game::Decode(ByteBuffer& buf) {
         err = SetStartFen(fen);
 
     if (err == OK)
-        err = DecodeVariation(buf);
+        err = DecodeVariation(game);
 
-    if (err == OK)
-        err = decodeComments(buf, FirstMove);
+    if (err == OK) {
+        auto omg = ByteBuffer{(const unsigned char*)data.comments, data.commentsLen};
+        err = decodeComments(omg, FirstMove);
+    }
 
     return err;
 }

@@ -104,24 +104,23 @@ public: // CodecNative CRTP
 	 * data (usable to retrieve the data with getGameData()).
 	 * - on failure, a @e std::pair containing an error code and 0.
 	 */
-	std::pair<errorT, uint64_t> dyn_addGameData(const byte* src,
-	                                            size_t length) {
-		ASSERT(src != 0);
-
+	std::tuple<errorT, uint64_t, size_t> dyn_addGameData(GameData const& data) {
+		const auto length = data.gameLen + data.commentsLen;
 		if (length >= LIMIT_GAMELEN)
-			return std::make_pair(ERROR_GameLengthLimit, 0);
+			return {ERROR_GameLengthLimit, 0, 0};
 
 		auto offset = v_.size();
 		auto capacity = v_.capacity();
 		if (capacity - offset < length) // Doesn't fit in the current chunk
 			offset = capacity;
 		if (offset >= LIMIT_GAMEOFFSET)
-			return std::make_pair(ERROR_OffsetLimit, 0);
+			return {ERROR_OffsetLimit, 0, 0};
 
 		v_.resize(offset + length);
 		ASSERT(v_.contiguous(offset) >= length);
-		std::copy_n(src, length, &v_[offset]);
-		return {OK, offset};
+		auto it = std::copy_n(data.game, data.gameLen, &v_[offset]);
+		std::copy_n(data.comments, data.commentsLen, it);
+		return {OK, offset, length};
 	}
 
 	/**

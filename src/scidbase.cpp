@@ -211,11 +211,11 @@ errorT scidBaseT::importGames(const scidBaseT* srcBase, const HFilter& filter, c
 errorT scidBaseT::importGameHelper(const scidBaseT* srcBase, gamenumT gNum) {
 	auto srcIe = srcBase->getIndexEntry(gNum);
 	auto dataSz = srcIe->GetLength();
-	auto data = srcBase->codec_->getGameData(srcIe->GetOffset(), dataSz);
-	if (data == nullptr)
+	auto data = srcBase->codec_->getGameFull(*srcIe);
+	if (data.game == nullptr)
 		return ERROR_FileRead;
 
-	return codec_->addGame(srcIe, srcBase->getNameBase(), data, dataSz);
+	return codec_->addGame(*srcIe, *srcBase->getNameBase(), data);
 }
 
 errorT scidBaseT::importGames(ICodecDatabase::Codec dbtype,

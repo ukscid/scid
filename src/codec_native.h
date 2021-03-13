@@ -48,16 +48,15 @@ protected:
 	std::vector<byte> bbuf_;
 
 public: // ICodecDatabase interface
-	errorT addGame(const IndexEntry* srcIe, const NameBase* srcNb,
-	               const byte* srcData, size_t dataLen) override {
-		IndexEntry ie = *srcIe;
+	errorT addGame(IndexEntry const& srcIe, NameBase const& nb, GameData const& data) override {
+		IndexEntry ie = srcIe;
 		errorT err = addGameHelper(
-		    &ie, srcData, dataLen,
-		    srcNb->GetName(NAME_PLAYER, srcIe->GetWhite()),
-		    srcNb->GetName(NAME_PLAYER, srcIe->GetBlack()),
-		    srcNb->GetName(NAME_EVENT, srcIe->GetEvent()),
-		    srcNb->GetName(NAME_SITE, srcIe->GetSite()),
-		    srcNb->GetName(NAME_ROUND, srcIe->GetRound()));
+		    &ie, data,
+		    nb.GetName(NAME_PLAYER, ie.GetWhite()),
+		    nb.GetName(NAME_PLAYER, ie.GetBlack()),
+		    nb.GetName(NAME_EVENT,  ie.GetEvent()),
+		    nb.GetName(NAME_SITE,   ie.GetSite()),
+		    nb.GetName(NAME_ROUND,  ie.GetRound()));
 		if (err != OK)
 			return err;
 
@@ -71,7 +70,9 @@ public: // ICodecDatabase interface
 		if (err)
 			return err;
 
-		err = addGameHelper(&ie, bbuf_.data(), bbuf_.size(),
+		// TODO:
+		auto data = GameData{};
+		err = addGameHelper(&ie, data,
 		                    game->GetWhiteStr(), game->GetBlackStr(),
 		                    game->GetEventStr(), game->GetSiteStr(),
 		                    game->GetRoundStr());
@@ -91,7 +92,9 @@ public: // ICodecDatabase interface
 		if (err)
 			return err;
 
-		err = addGameHelper(&ie, bbuf_.data(), bbuf_.size(),
+		// TODO:
+		auto data = GameData{};
+		err = addGameHelper(&ie, data,
 		                    game->GetWhiteStr(), game->GetBlackStr(),
 		                    game->GetEventStr(), game->GetSiteStr(),
 		                    game->GetRoundStr());
@@ -102,7 +105,7 @@ public: // ICodecDatabase interface
 	}
 
 private:
-	errorT addGameHelper(IndexEntry* ie, const byte* srcData, size_t dataLen,
+	errorT addGameHelper(IndexEntry* ie, GameData const& data,
 	                     const char* white, const char* black,
 	                     const char* event, const char* site,
 	                     const char* round) {
@@ -133,12 +136,12 @@ private:
 			return id.first;
 		ie->SetRound(id.second);
 
-		auto offset = derived()->dyn_addGameData(srcData, dataLen);
-		if (offset.first == OK) {
-			ie->SetOffset(offset.second);
-			ie->SetLength(dataLen);
+		auto [err, offset, length] = derived()->dyn_addGameData(data);
+		if (err == OK) {
+			ie->SetOffset(offset);
+			ie->SetLength(length);
 		}
-		return offset.first;
+		return err;
 	}
 
 	Derived* derived() { return static_cast<Derived*>(this); }

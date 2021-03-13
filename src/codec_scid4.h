@@ -141,32 +141,34 @@ public: // CodecNative interface
 	 *   data (needed for retrieving the data with getGameData()).
 	 * - on failure, a @e std::pair containing an error code and 0.
 	 */
-	std::pair<errorT, uint64_t> dyn_addGameData(const byte* src,
-	                                            size_t length) {
-		ASSERT(src != 0);
-		const char* data = reinterpret_cast<const char*>(src);
+	std::tuple<errorT, uint64_t, size_t> dyn_addGameData(GameData const& data) {
+		//TODO: encode tags!
 
+		const auto length = data.gameLen + data.commentsLen;
 		if (length >= LIMIT_GAMELEN)
-			return std::make_pair(ERROR_GameLengthLimit, 0);
+			return {ERROR_GameLengthLimit, 0, 0};
 
 		// The SCID4 format uses 32-bits to store games' offset.
 		uint64_t offset = gfile_.size();
 		if (offset >= LIMIT_GAMEOFFSET - length)
-			return std::make_pair(ERROR_OffsetLimit, 0);
+			return {ERROR_OffsetLimit, 0, 0};
 
 		// The SCID4 format stores games into blocks of 128KB.
 		// If the current block does not have enough space, we fill it with
 		// random data and use the next one.
 		uint64_t blockSpace = LIMIT_GAMELEN - (offset % LIMIT_GAMELEN);
 		if (blockSpace < length) {
-			errorT err = gfile_.append(data, blockSpace);
+			errorT err = gfile_.append(gamecache_, blockSpace);
 			if (err != OK)
-				return std::make_pair(err, 0);
+				return {err, 0, 0};
 			offset += blockSpace;
 		}
 
-		errorT err = gfile_.append(data, length);
-		return std::make_pair(err, offset);
+		errorT err = gfile_.append((const char*)data.game, data.gameLen);
+		if (err == OK)
+			err = gfile_.append((const char*)data.comments, data.commentsLen);
+
+		return {err, offset, length};
 	}
 
 	/**

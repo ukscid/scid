@@ -35,6 +35,17 @@ class IndexEntry;
 class NameBase;
 class Progress;
 
+	struct GameData {
+		const byte* game;
+		size_t gameLen;
+		const char* comments;
+		size_t commentsLen;
+		std::string_view* tags;
+		size_t nTags;
+	};
+
+#include "indexentry.h"
+
 /**
  * This interface separates the logic of a database from its representation.
  * Ideally all the file I/O should be encapsulated in classes derived from this
@@ -97,6 +108,18 @@ public:
 	 */
 	virtual const byte* getGameData(uint64_t offset, uint32_t length) = 0;
 
+	virtual GameData getGameFull(IndexEntry const& ie) {
+		auto res = GameData();
+		auto length = ie.GetLength();
+		auto data = getGameData(ie.GetOffset(), length);
+
+		// TODO: decodde tags and find tags section length
+
+		// TODO: find game End and return the game and gameLen
+
+		return res;
+	}
+
 	/**
 	 * Add a game to the database.
 	 * @param srcIe:   valid pointer to the header data.
@@ -106,8 +129,7 @@ public:
 	 * @param dataLen: length of the game data (in bytes).
 	 * @returns OK if successful or an error code.
 	 */
-	virtual errorT addGame(const IndexEntry* srcIe, const NameBase* srcNb,
-	                       const byte* srcData, size_t dataLen) = 0;
+	virtual errorT addGame(IndexEntry const& ie, NameBase const& nb, GameData const& data) = 0;
 
 	/**
 	 * Add a game to the database.
