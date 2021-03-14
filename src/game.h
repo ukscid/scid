@@ -451,7 +451,7 @@ public:
     errorT    Encode(std::vector<byte>& dest, IndexEntry& ie) const;
     errorT    DecodeSkipTags(ByteBuffer* buf);
     errorT    DecodeNextMove (ByteBuffer * buf, simpleMoveT& sm);
-    errorT    Decode(IndexEntry const& ie, NameBase const& nb, GameData const& data);
+    errorT    Decode(IndexEntry const& ie, NameBase const& nb, std::pair<ByteBuffer, std::vector<std::string_view>> data);
     errorT    DecodeMovesOnly(ByteBuffer& buf);
 
     Game* clone();

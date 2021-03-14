@@ -65,11 +65,12 @@ public: // ICodecDatabase interface
 		return ERROR_CodecUnsupFeat;
 	}
 
-	const byte* getGameData(uint64_t offset, uint32_t length) override {
+	ByteBuffer getGameData(uint64_t offset, uint32_t length) override {
 		ASSERT(offset < v_.size());
 		ASSERT(length <= v_.size() - offset);
 		ASSERT(v_.contiguous(static_cast<size_t>(offset)) >= length);
-		return &v_[offset];
+		
+		return {&v_[offset], length};
 	}
 
 	errorT saveIndexEntry(const IndexEntry& ie, gamenumT replaced) override {

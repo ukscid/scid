@@ -3107,23 +3107,18 @@ errorT Game::DecodeMovesOnly(ByteBuffer& buf) {
 //      Decodes all the information: comments, variations, non-standard
 //      tags, etc.
 //
-errorT Game::Decode(const IndexEntry& ie, const NameBase& nb, GameData const& data) {
+errorT Game::Decode(const IndexEntry& ie, const NameBase& nb, std::pair<ByteBuffer, std::vector<std::string_view>> data) {
     Clear();
     LoadStandardTags(&ie, &nb);
 
     errorT err = OK;
-    // errorT err = text.decodeTags([&](auto tag, auto value) {
-    //     accessTagValue(tag.data(), tag.size()).assign(value);
-    // });
-    if (err)
-        return err;
-    for (size_t i = 0; i < data.nTags; i += 2) {
-            auto const& tag = data.tags[i];
-        accessTagValue(tag.data(), tag.size()).assign(data.tags[i+i]);
+    // TODO: check valid vector size
+    for (size_t i = 0, n = data.second.size(); i < n; i += 2) {
+        auto const& tag = data.second[i];
+        accessTagValue(tag.data(), tag.size()).assign(data.second[i+i]);
     }
 
-    ByteBuffer game(data.game, data.gameLen);
-    const auto [err_startpos, fen] = game.decodeStartBoard();
+    const auto [err_startpos, fen] = data.first.decodeStartBoard();
     if (err_startpos)
         return err_startpos;
 
@@ -3131,11 +3126,10 @@ errorT Game::Decode(const IndexEntry& ie, const NameBase& nb, GameData const& da
         err = SetStartFen(fen);
 
     if (err == OK)
-        err = DecodeVariation(game);
+        err = DecodeVariation(data.first);
 
     if (err == OK) {
-        auto omg = ByteBuffer{(const unsigned char*)data.comments, data.commentsLen};
-        err = decodeComments(omg, FirstMove);
+        err = decodeComments(data.first, FirstMove);
     }
 
     return err;

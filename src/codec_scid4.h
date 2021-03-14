@@ -28,11 +28,13 @@
 #include "codec_native.h"
 #include "filebuf.h"
 #include <limits>
+#include <string_view>
 
 /**
  * This class manages databases encoded in SCID format v4.
  */
 class CodecSCID4 : public CodecNative<CodecSCID4> {
+	std::vector<std::string_view> tagcache_;
 	std::vector<std::string> filenames_;
 	Filebuf idxfile_;
 	FilebufAppend gfile_;
@@ -103,18 +105,44 @@ public: // ICodecDatabase interface
 		return OK;
 	}
 
-	const byte* getGameData(uint64_t offset, uint32_t length) final {
+	ByteBuffer getGameData(uint64_t offset, uint32_t length) final {
 		if (offset >= gfile_.size())
-			return NULL;
+			return {nullptr, 0};
 		if (length >= LIMIT_GAMELEN)
-			return NULL;
+			return {nullptr, 0};
 
 		if (gfile_.pubseekpos(offset) == -1)
-			return NULL;
+			return {nullptr, 0};
 		if (gfile_.sgetn(gamecache_, length) != std::streamsize(length))
-			return NULL;
+			return {nullptr, 0};
 
-		return reinterpret_cast<const byte*>(gamecache_);
+		ByteBuffer data(reinterpret_cast<const byte*>(gamecache_), length);
+		if (OK != data.decodeTags([](auto, auto) {}))
+			return {nullptr, 0};
+
+		return data;
+	}
+
+	std::pair<ByteBuffer, std::vector<std::string_view>>
+	getGameFull(IndexEntry const& ie) final {
+		const auto length = ie.GetLength();
+		const auto offset = ie.GetOffset();
+
+		if (offset >= gfile_.size() || length >= LIMIT_GAMELEN ||
+		    gfile_.pubseekpos(offset) == -1 ||
+		    gfile_.sgetn(gamecache_, length) != std::streamsize(length))
+			return {{nullptr, 0}, {}};
+
+		auto res = std::pair(
+		    ByteBuffer(reinterpret_cast<const byte*>(gamecache_), length),
+		    std::vector<std::string_view>());
+		if (OK != res.first.decodeTags([&](auto&& tag, auto&& value) {
+			    res.second.emplace_back(tag);
+			    res.second.emplace_back(value);
+		    }))
+			return {{nullptr, 0}, {}};
+
+		return res;
 	}
 
 	errorT saveIndexEntry(const IndexEntry& ie, gamenumT replaced) final {
@@ -142,7 +170,7 @@ public: // CodecNative interface
 	 * - on failure, a @e std::pair containing an error code and 0.
 	 */
 	std::tuple<errorT, uint64_t, size_t> dyn_addGameData(GameData const& data) {
-		//TODO: encode tags!
+		// TODO: encode tags!
 
 		const auto length = data.gameLen + data.commentsLen;
 		if (length >= LIMIT_GAMELEN)

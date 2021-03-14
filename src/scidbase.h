@@ -119,34 +119,24 @@ struct scidBaseT {
 		return nb_;
 	}
 	GameView getGame(const IndexEntry* ie) const {
-		auto length = ie->GetLength();
-		auto data = codec_->getGameData(ie->GetOffset(), length);
+		auto data = codec_->getGameData(ie->GetOffset(), ie->GetLength());
 		if (data) {
-			auto bbuf = ByteBuffer(data, length);
-			auto err = bbuf.decodeTags([](auto, auto) {});
-			if (err == OK) {
-				auto [errPos, fen] = bbuf.decodeStartBoard();
-				if (errPos == OK) {
-					if (fen) {
-						Position startPos;
-						if (startPos.ReadFromFEN(fen) == OK) {
-							return GameView(bbuf, startPos);
-						}
-					} else {
-						return GameView(bbuf);
+			auto [errPos, fen] = data.decodeStartBoard();
+			if (errPos == OK) {
+				if (fen) {
+					Position startPos;
+					if (startPos.ReadFromFEN(fen) == OK) {
+						return GameView(data, startPos);
 					}
+				} else {
+					return GameView(data);
 				}
 			}
 		}
 		return GameView({nullptr, 0});
 	}
 	ByteBuffer getGame(const IndexEntry& ie) const {
-		auto length = ie.GetLength();
-		auto data = codec_->getGameData(ie.GetOffset(), length);
-		if (!data)
-			length = 0; // Error
-
-		return {data, length};
+		return codec_->getGameData(ie.GetOffset(), ie.GetLength());
 	}
 	errorT getGame(const IndexEntry& ie, Game& dest) const {
 		return dest.Decode(ie, *getNameBase(), codec_->getGameFull(ie));
