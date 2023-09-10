@@ -362,14 +362,14 @@ proc ::enginecfg::createConfigWidgets {id configFrame engCfg} {
     set ::$w.wrap $pvwrap
 
     $w insert end "\n[tr EngineFlipEvaluation]:\t"
-    ttk::checkbutton $w.scoreside -style Switch.Toolbutton -onvalue engine -offvalue white -command "
+    ttk::checkbutton $w.scoreside -style Switch.TCheckbutton -onvalue engine -offvalue white -command "
         lset ::enginewin::engConfig_$id 6 0 \[::update_switch_btn $w.scoreside \]
     "
     ::update_switch_btn $w.scoreside $scoreside
     $w window create end -window $w.scoreside -pady 2
 
     $w insert end "\n[tr EngineShowLog]:\t"
-    ttk::checkbutton $w.debug -style Switch.Toolbutton -command "
+    ttk::checkbutton $w.debug -style Switch.TCheckbutton -command "
         lset ::enginewin::engConfig_$id 6 3 \[::update_switch_btn $w.debug\]
         ::enginewin::logEngine $id \[::update_switch_btn $w.debug\]
     "
@@ -382,7 +382,7 @@ proc ::enginecfg::createConfigWidgets {id configFrame engCfg} {
     if {$enginePid != ""} {
         $w insert end "\n[tr LowPriority]:\t"
         ttk::checkbutton $w.priority -onvalue idle -offvalue normal \
-            -style Switch.Toolbutton -command "
+            -style Switch.TCheckbutton -command "
                 catch { sc_info priority $enginePid \[ ::update_switch_btn $w.priority \] }
                 lset ::enginewin::engConfig_$id 6 4 \[ ::update_switch_btn $w.priority \]
             "

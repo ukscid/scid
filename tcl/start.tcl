@@ -490,6 +490,48 @@ proc configure_style {} {
   ttk::style configure fieldbg.TLabel -background [ttk::style lookup . -fieldbackground "" white]
 
   ttk::style configure Switch.Toolbutton -padding 0
+  catch { image delete ::switch(on); image delete ::switch(off) }
+  set fg [ttk::style lookup . -foreground "" grey90]
+  set bg [ttk::style lookup . -background "" grey16]
+  set sc [ttk::style lookup . -selectbackground "" grey30]
+  image create bitmap ::switch(on) -foreground $fg -background $sc -data {
+      #define switchon1_width 40
+      #define switchon1_height 18
+      static unsigned char switchon_bits[] = {
+          0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x80, 0x01, 0x00,
+          0x00, 0x00, 0x80, 0x01, 0x00, 0x00, 0xfe, 0x9f, 0x01, 0x00, 0x00, 0xfe,
+          0x9f, 0x01, 0x00, 0x00, 0xfe, 0x9f, 0x01, 0x00, 0x00, 0xfe, 0x9f, 0x01,
+          0x00, 0x00, 0xfe, 0x9f, 0x01, 0x00, 0x00, 0xfe, 0x9f, 0x01, 0x00, 0x00,
+          0xfe, 0x9f, 0x01, 0x00, 0x00, 0xfe, 0x9f, 0x01, 0x00, 0x00, 0xfe, 0x9f,
+          0x01, 0x00, 0x00, 0xfe, 0x9f, 0x01, 0x00, 0x00, 0xfe, 0x9f, 0x01, 0x00,
+          0x00, 0xfe, 0x9f, 0x01, 0x00, 0x00, 0x00, 0x80, 0x01, 0x00, 0x00, 0x00,
+          0x80, 0xff, 0xff, 0xff, 0xff, 0xff };
+  }
+  image create bitmap ::switch(off) -foreground $fg -background $bg -data {
+      #define switchoff1_width 40
+      #define switchoff1_height 18
+      static unsigned char switchoff_bits[] = {
+          0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x80, 0x01, 0x00,
+          0x00, 0x00, 0x80, 0xf9, 0x7f, 0x00, 0x00, 0x80, 0x09, 0x40, 0x00, 0x00,
+          0x80, 0x09, 0x40, 0x00, 0x00, 0x80, 0x09, 0x40, 0x00, 0x00, 0x80, 0x09,
+          0x40, 0x00, 0x00, 0x80, 0x09, 0x40, 0x00, 0x00, 0x80, 0x09, 0x40, 0x00,
+          0x00, 0x80, 0x09, 0x40, 0x00, 0x00, 0x80, 0x09, 0x40, 0x00, 0x00, 0x80,
+          0x09, 0x40, 0x00, 0x00, 0x80, 0x09, 0x40, 0x00, 0x00, 0x80, 0xf9, 0x7f,
+          0x00, 0x00, 0x80, 0x01, 0x00, 0x00, 0x00, 0x80, 0x01, 0x00, 0x00, 0x00,
+          0x80, 0xff, 0xff, 0xff, 0xff, 0xff };
+  }
+  catch {ttk::style element create Switch.indicator image \
+             [list ::switch(off) {disabled selected} ::switch(off) \
+                  disabled ::switch(off) {pressed selected} ::switch(on) \
+                  pressed ::switch(off) {active selected} ::switch(on) \
+                  active ::switch(off) selected ::switch(on) ] \
+             -width 42 -sticky w }
+  ttk::style layout Switch.TCheckbutton {
+      Switch.padding -children {
+          Switch.indicator -side left -sticky e
+          Switch.label -side right -expand true -sticky w
+      }
+  }
 
   # Some themes (e.g. vista and xpnative) use custom field elements and ignore -fieldbackground
   if {[regexp {(Combobox|Entry|Spinbox)\.(field|background)} [ttk::style element names]]} {
@@ -533,12 +575,14 @@ proc ::update_switch_btn {widget {set_value ""}} {
     if {$set_value ne ""} {
         set ::$varname $set_value
     }
-    if {[$widget instate selected]} {
-        set full_circle [expr $::windowsOS ?"\u2B24":"\u25CF"]
-        $widget configure -text "       $full_circle"
-    } else {
-        $widget configure -text "\u25EF       "
-    }
+#    if {[$widget instate selected]} {
+#        set full_circle [expr $::macOS ?"\u25CF":"\u2B24"]
+#        $widget configure -text "       $full_circle " ;#\u2501\u2501 or \u2550\u2550
+#        $widget configure -text "      \u2B1B "
+#    } else {
+#        $widget configure -text " \u25EF       "
+#        $widget configure -text " \u2B1C      "
+#    }
     return [set ::$varname]
 }
 
