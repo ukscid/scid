@@ -453,7 +453,7 @@ proc ::enginecfg::createOptionWidgets {id configFrame options} {
                 ttk::combobox $w.value$i -width [incr maxlen] -values $var_list -state readonly
                 bind $w.value$i <<ComboboxSelected>> "::enginecfg::onSubmitOption $id $i %W"
             } elseif {$type eq "check"} {
-                ttk::checkbutton $w.value$i -onvalue true -offvalue false -style Switch.Toolbutton -command \
+                ttk::checkbutton $w.value$i -onvalue true -offvalue false -style Switch.TCheckbutton -command \
                     "::enginecfg::setOption $id $i \[::update_switch_btn $w.value$i \]"
             } else {
                 if {$type eq "spin" || $type eq "slider"} {
