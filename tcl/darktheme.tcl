@@ -118,6 +118,18 @@ namespace eval ttk::theme::dark {
             -darkcolor [list pressed $basecol] \
         ;
 
+        ttk::style element create Switch.indicator image \
+            [list switchoff {disabled selected} switchoff \
+                 disabled switchoff {pressed selected} switchon \
+                 pressed switchoff {active selected} switchon \
+                 active switchoff selected switchon ] \
+            -width [expr [image width switchon] + 2] -sticky w
+        ttk::style layout Switch.TCheckbutton {
+            Switch.padding -children {
+                Switch.indicator -side left -sticky e
+                Switch.label -side right -expand true -sticky w
+            }
+        }
         ttk::style configure TCheckbutton \
             -padding 2
         ;
