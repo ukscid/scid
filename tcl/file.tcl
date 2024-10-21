@@ -92,6 +92,17 @@ proc ::file::New {} {
 #    Opens file-open dialog and opens the selected Scid database.
 #
 proc ::file::Open {{fName ""}} {
+  if {$fName == ""} {
+      set ftype {
+        { "All Scid files" {".si5" ".si4" ".si3" ".pgn" ".epd"} }
+        { "Scid databases" {".si5" ".si4" ".si3"} }
+        { "PGN files" {".pgn" ".PGN"} }
+        { "EPD files" {".epd" ".EPD"} }
+      }
+    set fName [tk_getOpenFile -initialdir $::initialDir(base) -filetypes $ftype -title "Open a Scid file"]
+    if {$fName == ""} { return }
+  }
+
   lassign [::file::Open_ "$fName"] err fName
   if {$err == 0} {
     set ::curr_db $::file::lastOpened
@@ -115,7 +126,7 @@ proc ::file::Open {{fName ""}} {
   return $err
 }
 
-proc ::file::openBaseAsTree { { fName "" } } {
+proc ::file::openBaseAsTree { fName } {
   set current [sc_base current]
   set err [::file::Open_ "$fName"]
   sc_base switch $current
@@ -124,16 +135,24 @@ proc ::file::openBaseAsTree { { fName "" } } {
   return $err
 }
 
-# open a database or switch to it if already open
-proc ::file::OpenOrSwitch {fName {add_to_recent 0} } {
+# open a database or switch to it if it is already open
+proc ::file::OpenOrSwitch { fname } {
+  set slot [sc_base slot $fname]
+  if {$slot != 0} {
+    ::file::SwitchToBase $slot
+    return 0
+  }
+  return [::file::Open "$fname"]
+}
+
+# open a database or switch to it if it is already open, but do not load a game
+# return error code and the information on whether the database was open
+proc ::file::OpenForTest {fName} {
     set baseId [sc_base slot $fName]
     if { $baseId == 0} {
         set was_open 0
-        lassign [::file::Open_ "$fName"] err fName
-        if {$err == 0} {
-            set ::curr_db $::file::lastOpened
-            if { $add_to_recent } { ::recentFiles::add "$fName" }
-        }
+        set err [ ::file::Open_ "$fName"]
+        set ::curr_db $::file::lastOpened
     } else {
         set ::curr_db [sc_base switch $baseId]
         set was_open 1
@@ -202,7 +221,7 @@ proc ::file::Open_ {{fName ""} } {
     }
   }
 
-  return [list $err $fName]
+  return $err
 }
 
 # ::file::Upgrade
