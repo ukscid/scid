@@ -44,12 +44,8 @@ namespace eval tactics {
         busyCursor .
         foreach fname $fileList {
             set fname [file nativename $fname]
-            lassign [::file::OpenOrSwitch $fname 0] err wasOpened
-            if { $err } {
-                if {$::errorCode == $::ERROR::UserCancel} { break }
-                ERROR::MessageBox
-                continue
-            }
+            lassign [::file::OpenForTest $fname] err wasOpened
+            if { $err } { continue }
             set baseId $::curr_db
 
             set filter [sc_filter new $baseId]
@@ -357,12 +353,9 @@ namespace eval tactics {
         set prevBase [sc_base current]
         set curr_game [sc_game number]
         sc_game push
-        lassign [::file::OpenOrSwitch $fname 0] err wasOpened
+        lassign [::file::OpenForTest $fname] err wasOpened
+        if {$err} { return }
         set baseId $::curr_db
-        if {$err} {
-            ERROR::MessageBox
-            return
-        }
 
         set filter [sc_filter new $baseId]
         sc_filter search $baseId $filter header -filter RESET -site "\"$::tactics::solved\""
@@ -629,19 +622,12 @@ namespace eval tactics {
     ################################################################################
     proc loadBase { name } {
         global ::tactics::baseId ::tactics::filter
-        lassign [::file::OpenOrSwitch $name 0] err wasOpened
-        if { $err } {
-            ERROR::MessageBox
-            return
-        }
+        if { [::file::OpenOrSwitch $name] } { return }
         set baseId $::curr_db
         #TODO:
         #set filter [sc_filter new $baseId]
         set filter dbfilter
         sc_filter search $baseId $filter header -filter RESET -flag S -flag| T -site! "\"$::tactics::solved\""
-
-        ::notify::GameChanged
-        ::notify::DatabaseChanged
         return 0
     }
     ################################################################################
