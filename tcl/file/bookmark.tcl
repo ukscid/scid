@@ -168,7 +168,7 @@ proc ::bookmarks::Go {entry} {
   set fname [lindex $entry 2]
   set gnum [lindex $entry 3]
   set ply [lindex $entry 4]
-  lassign [::file::OpenOrSwitch $fname 1] err wasOpened
+  lassign [::file::OpenOrSwitch $fname] err wasOpened
   if { $err } { return }
   # Find and load the best database game matching the bookmark:
   set white [lindex $entry 5]
