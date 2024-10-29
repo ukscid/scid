@@ -481,6 +481,7 @@ set ::tools::graphs::score::MaxY 6
 # extract the timecontrols from pgn tag
 proc getTimeControls {} {
     set result {}
+    set incompleteControls 0
     foreach t [split [sc_game tag get Extra] "\n"] {
         if { [string equal -nocase [lindex $t 0] "TimeControl" ] } {
             set timecontrol [lindex $t 1]
@@ -488,17 +489,23 @@ proc getTimeControls {} {
             foreach { value moves time increment time2 increment2  } $times {
                 if { $moves ne "" } {
                     # found “40/6000+30"
+                    if { $increment eq "" } { set increment 0}
                     lappend result $moves $time $increment
+                    set incompleteControls 1
                 } else {
                     # found “500+30"
+                    if { $increment2 eq "" } { set increment2 0}
                     # hack: 1000 = valid for all moves
                     lappend result 1000 $time2 $increment2
+                    set incompleteControls 0
                 }
                 # ignore "*300" 
             }
             break;
         }
     }
+    # avoid to have no info if "40/6000+30" is a last control
+    if { $incompleteControls } { lappend result 1000 0 0 }
     return $result
 }
 ###########################
