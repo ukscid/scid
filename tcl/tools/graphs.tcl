@@ -478,6 +478,29 @@ set ::tools::graphs::score::Times 1
 set ::tools::graphs::score::TimeSum 0
 set ::tools::graphs::score::MaxY 6
 
+# extract the timecontrols from pgn tag
+proc getTimeControls {} {
+    set result {}
+    foreach t [split [sc_game tag get Extra] "\n"] {
+        if { [string equal -nocase [lindex $t 0] "TimeControl" ] } {
+            set timecontrol [lindex $t 1]
+            set times [regexp -all -inline {(\d+)/(\d+)(\+\d+)*|(\d+)(\+\d+)*} $timecontrol ]
+            foreach { value moves time increment time2 increment2  } $times {
+                if { $moves ne "" } {
+                    # found “40/6000+30"
+                    lappend result $moves $time $increment
+                } else {
+                    # found “500+30"
+                    # hack: 1000 = valid for all moves
+                    lappend result 1000 $time2 $increment2
+                }
+                # ignore "*300" 
+            }
+            break;
+        }
+    }
+    return $result
+}
 ###########################
 # Game score and time graph
 
@@ -496,6 +519,11 @@ proc MoveTimeList {color add} {
     set base [sc_base current]
     set gnum [sc_game number]
     set game [sc_base getGame $base $gnum live]
+    set timecontrols [getTimeControls]
+    set tcMoves [lindex $timecontrols 0]
+    set tcTime [lindex $timecontrols 1]
+    set tcIncr [lindex $timecontrols 2]
+    if { $tcMoves ne "" } { set oldtime $tcTime }
     set n [llength $game]
     set movenr 0
     for {set i 0} { $i < $n} { incr i } {
@@ -533,7 +561,25 @@ proc MoveTimeList {color add} {
             regexp $clkExp $comment -> clock
             if { $clock != "" } {
                 if { [scan $clock "%f:%f:%f" ho mi sec ] == 3 } {
-                    lappend movetimes [expr $movenr+$offset] [expr { $ho*60.0 + $mi + $sec/60}] }
+                    if { ! $add && $tcMoves ne "" } {
+                        # calculate time per move from clock
+                        set newtime [expr $ho*3600.0 + $mi*60 + $sec]
+                        set diff [expr $oldtime - $newtime + $tcIncr ]
+                        if { $movenr >= $tcMoves && $diff < 0 } {
+                            # new timecontrol reached, adjust values
+                            set timecontrols [lrange $timecontrols 3 end]
+                            set tcMoves [expr $tcMoves + [lindex $timecontrols 0]]
+                            set tcTime [expr [lindex $timecontrols 1] ]
+                            set tcIncr [expr [lindex $timecontrols 2] ]
+                            set oldtime [expr $oldtime + $tcTime + $tcIncr]
+                            set newtime [expr $newtime + $tcIncr]
+                        }
+                        lappend movetimes [expr $movenr+$offset] [expr $oldtime - $newtime + $tcIncr ]
+                        set oldtime $newtime
+                    } else {
+                        lappend movetimes [expr $movenr+$offset] [expr { $ho*60.0 + $mi + $sec/60}]
+                    }
+                }
             } else {
                 set emtExp {.*?\[%emt\s*(.*?)\s*\].*}
                 set emt ""
