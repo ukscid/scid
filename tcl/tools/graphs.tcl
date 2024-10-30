@@ -527,9 +527,7 @@ proc MoveTimeList {color add} {
     set gnum [sc_game number]
     set game [sc_base getGame $base $gnum live]
     set timecontrols [getTimeControls]
-    set tcMoves [lindex $timecontrols 0]
-    set tcTime [lindex $timecontrols 1]
-    set tcIncr [lindex $timecontrols 2]
+    lassign $timecontrols tcMoves tcTime tcIncr
     if { $tcMoves ne "" } { set oldtime $tcTime }
     set n [llength $game]
     set movenr 0
@@ -575,9 +573,8 @@ proc MoveTimeList {color add} {
                         if { $movenr >= $tcMoves && $diff < 0 } {
                             # new timecontrol reached, adjust values
                             set timecontrols [lrange $timecontrols 3 end]
-                            set tcMoves [expr $tcMoves + [lindex $timecontrols 0]]
-                            set tcTime [expr [lindex $timecontrols 1] ]
-                            set tcIncr [expr [lindex $timecontrols 2] ]
+                            lassign $timecontrols tcNewMoves tcTime tcIncr
+                            incr tcMoves $tcNewMoves
                             set oldtime [expr $oldtime + $tcTime + $tcIncr]
                             set newtime [expr $newtime + $tcIncr]
                         }
