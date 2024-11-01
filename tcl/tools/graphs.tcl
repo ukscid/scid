@@ -476,6 +476,7 @@ set ::tools::graphs::score::Black 0
 set ::tools::graphs::score::Scores 1
 set ::tools::graphs::score::Times 1
 set ::tools::graphs::score::TimeSum 0
+set ::tools::graphs::score::TimeStrict 0
 set ::tools::graphs::score::MaxY 6
 
 # extract the timecontrols from pgn tag
@@ -520,7 +521,8 @@ proc getTimeControls {} {
 #        "%emt 00:00:00" (used by pychess)
 #        "%emt 1.23" (used by Raptor)
 #    found somewhere in the comment of the move.
-proc MoveTimeList {color add} {
+# strict: on timecontrol use strict the timecontrol moves
+proc MoveTimeList {color add strict} {
     set movetimes   { }
     set mainline { }
     set base [sc_base current]
@@ -536,23 +538,20 @@ proc MoveTimeList {color add} {
     }
     set n [llength $game]
     set movenr 0
+    set offset 0.0
+    if { $color == "b" } { set offset 0.5; set game [lrange $game 1 end] }
     for {set i 0} { $i < $n} { incr i } {
         set RAVd [lindex [lindex $game $i] 0]
         set RAVn [lindex [lindex $game $i] 1]
         # only search in the mainline
         if { $RAVd == 0 && $RAVn == 0} {
-            # append comments for white
-            if {  $color == "w" && [expr $movenr % 2] == 1 }  {
-                lappend mainline [lindex [lindex $game $i] 4] }
-            # append comments for black
-            if {  $color == "b" && [expr $movenr % 2] == 0 }  {
+            # append comments
+            if {  [expr $movenr % 2] == 1 }  {
                 lappend mainline [lindex [lindex $game $i] 4] }
             incr movenr
         }
     }
     set movenr 0
-    set offset 0.0
-    if {  $color == "w" } { set offset 0.5 }
     set sum 0.0
     for {set i 0} { $i < $n} { incr i } {
         # only look for the first match, because normaly only one of these types should used in game
@@ -575,7 +574,7 @@ proc MoveTimeList {color add} {
                         # calculate time per move from clock
                         set newtime [expr {$ho*3600.0 + $mi*60 + $sec}]
                         set diff [expr {$oldtime - $newtime + $tcIncr} ]
-                        if { $movenr >= $tcMoves && $diff < 0 } {
+                        if { $movenr >= $tcMoves && ($strict || $diff < 0) } {
                             # new timecontrol reached, adjust values
                             set timecontrols [lrange $timecontrols 3 end]
                             lassign $timecontrols tcNewMoves tcTime tcIncr
@@ -708,10 +707,12 @@ proc ::tools::graphs::score::Refresh { {docreate 1 }} {
         -command "::tools::graphs::score::Refresh"
     ttk::checkbutton $w.fbuttons.timesum -text $::tr(AnnotateTime) -variable ::tools::graphs::score::TimeSum \
         -command "::tools::graphs::score::Refresh" -offvalue "1" -onvalue "0"
+    ttk::checkbutton $w.fbuttons.strict -text "strict" -variable ::tools::graphs::score::TimeStrict \
+        -command "::tools::graphs::score::Refresh" -offvalue "0" -onvalue "1"
     # TODO translate
     ttk::label $w.fbuttons.labelm -text "Max Score:"
     ttk::spinbox $w.fbuttons.maxy -textvariable ::tools::graphs::score::MaxY -justify right -from 1 -to 12 -width 2 -command ::tools::graphs::score::Refresh
-    pack $w.fbuttons.timesum $w.fbuttons.time $w.fbuttons.score -side right -padx 6 -pady 0
+    pack $w.fbuttons.strict $w.fbuttons.timesum $w.fbuttons.time $w.fbuttons.score -side right -padx 6 -pady 0
     pack $w.fbuttons.maxy $w.fbuttons.labelm -side right
     pack $w.fbuttons -side bottom -fill both
     pack $w.c -side top -expand yes -fill both
@@ -739,7 +740,7 @@ proc ::tools::graphs::score::Refresh { {docreate 1 }} {
         set max 0
         # Find max Value of time, then set the tick value vor horizontal lines
         foreach j { "w" "b"} {
-            set coords [MoveTimeList $j $::tools::graphs::score::TimeSum]
+            set coords [MoveTimeList $j $::tools::graphs::score::TimeSum $::tools::graphs::score::TimeStrict]
             set coords$j $coords
             set ncoords [expr {[llength $coords] - 1}]
             for {set i 0} {$i < $ncoords} {incr i 2} {
