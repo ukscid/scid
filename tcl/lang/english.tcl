@@ -213,7 +213,7 @@ menuText E ToolsPlayerReport "Player Report..." 3 \
   {Generate a player report}
 menuText E ToolsRating "Rating Graph" 0 \
   {Graph the rating history of the current game players}
-menuText E ToolsScore "Score Graph" 0 {Show the score graph window}
+menuText E ToolsScore "Evaluation Graph" 0 {Show the evaluation graph window}
 menuText E ToolsExpCurrent "Export Current Game" 8 \
   {Write current game to a text file}
 menuText E ToolsExpCurrentPGN "Export Game to PGN File..." 15 \
@@ -635,7 +635,7 @@ translate E StartEngine {Start engine}
 translate E LockEngine {Lock engine to current position}
 translate E AnalysisCommand {Analysis Command}
 translate E PreviousChoices {Previous Choices}
-translate E AnnotateTime {Time per move in sec.}
+translate E AnnotateTime {Time per move}
 translate E AnnotateWhich {Add variations}
 translate E AnnotateAll {For moves by both sides}
 translate E AnnotateAllMoves {Annotate all moves}
