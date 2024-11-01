@@ -528,7 +528,12 @@ proc MoveTimeList {color add} {
     set game [sc_base getGame $base $gnum live]
     set timecontrols [getTimeControls]
     lassign $timecontrols tcMoves tcTime tcIncr
-    if { $tcMoves ne "" } { set oldtime $tcTime }
+    set factor 1
+    if { $tcMoves ne "" } {
+        set oldtime $tcTime
+        # if time more than 45min scale to minutes
+        if { $tcTime > 2700 } {set factor 60 }
+    }
     set n [llength $game]
     set movenr 0
     for {set i 0} { $i < $n} { incr i } {
@@ -568,20 +573,20 @@ proc MoveTimeList {color add} {
                 if { [scan $clock "%f:%f:%f" ho mi sec ] == 3 } {
                     if { ! $add && $tcMoves ne "" } {
                         # calculate time per move from clock
-                        set newtime [expr $ho*3600.0 + $mi*60 + $sec]
-                        set diff [expr $oldtime - $newtime + $tcIncr ]
+                        set newtime [expr {$ho*3600.0 + $mi*60 + $sec}]
+                        set diff [expr {$oldtime - $newtime + $tcIncr} ]
                         if { $movenr >= $tcMoves && $diff < 0 } {
                             # new timecontrol reached, adjust values
                             set timecontrols [lrange $timecontrols 3 end]
                             lassign $timecontrols tcNewMoves tcTime tcIncr
                             incr tcMoves $tcNewMoves
-                            set oldtime [expr $oldtime + $tcTime + $tcIncr]
-                            set newtime [expr $newtime + $tcIncr]
+                            set oldtime [expr {$oldtime + $tcTime + $tcIncr}]
+                            set newtime [expr {$newtime + $tcIncr}]
                         }
-                        lappend movetimes [expr $movenr+$offset] [expr $oldtime - $newtime + $tcIncr ]
+                        lappend movetimes [expr {$movenr+$offset}] [expr {($oldtime - $newtime + $tcIncr)/$factor} ]
                         set oldtime $newtime
                     } else {
-                        lappend movetimes [expr $movenr+$offset] [expr { $ho*60.0 + $mi + $sec/60}]
+                        lappend movetimes [expr {$movenr+$offset}] [expr {$ho*60.0 + $mi + $sec/60}]
                     }
                 }
             } else {
@@ -745,6 +750,8 @@ proc ::tools::graphs::score::Refresh { {docreate 1 }} {
         if {$max > 20} { set yticks 5 }
         if {$max > 50} { set yticks 10 }
         if {$max > 100} { set yticks 20 }
+        if {$max > 200} { set yticks 50 }
+        if {$max > 500} { set yticks 100 }
     }
 
   ::utils::graph::create score -width $width -height $height -xtop 25 -ytop 25 \
@@ -764,16 +771,25 @@ proc ::tools::graphs::score::Refresh { {docreate 1 }} {
   busyCursor $w
   update
 
+  set evalBar 2; set evalLine 0
   if { $::tools::graphs::score::Times } {
+      if  { $::tools::graphs::score::TimeSum } {
+          set bars 0; set lines 1
+      } else {
+          set firstColor #b8b8b8
+          set secondColor #282828
+          set bars 2; set lines 0
+          set evalBar 0; set evalLine 1
+      }
       # draw move time
-      catch {::utils::graph::data score data1 -color $firstColor -points 0 -lines 1\
+      catch {::utils::graph::data score data1 -color $firstColor -points 0 -lines $lines -bars $bars\
 		  -key [sc_game info white] -linewidth $linewidth -radius $psize -outline $firstColor -coords $coordsw }
-      catch {::utils::graph::data score data2 -color $secondColor -points 0 -lines 1 \
+      catch {::utils::graph::data score data2 -color $secondColor -points 0 -lines $lines -bars $bars \
 		 -linewidth $linewidth -radius $psize -outline $secondColor -coords $coordsb}
   }
   if { $::tools::graphs::score::Scores } {
       # draw score bars
-      catch {::utils::graph::data score data -color $linecolor -points 0 -lines 0 -bars 2 \
+      catch {::utils::graph::data score data -color $linecolor -points 0 -lines $evalLine -bars $evalBar \
 		 -linewidth $linewidth -radius $psize -outline $linecolor \
 		 -coords [::tools::graphs::MoveScoreList $::tools::graphs::score::White $::tools::graphs::score::Black]}
   }
