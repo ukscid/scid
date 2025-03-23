@@ -11,10 +11,11 @@ namespace eval calvar {
   set ::uci::uciInfo(log_stdout4) 0
 
   array set engineListBox {}
-  set thinkingTimePerLine 10
-  set thinkingTimePosition 30
+  set thinkingTimePerLine 3
+  set thinkingTimePosition 10
   set currentLine 1
   set currentListMoves {}
+  set engineName ""
   # each line begins with a list of moves, a nag code and ends with FEN
   set lines {}
   set analysisQueue {}
@@ -79,56 +80,31 @@ namespace eval calvar {
 
     # builds the list of UCI engines
     ttk::frame $w.fengines
-    ttk::label $w.fengines.eng -text $::tr(Engine)
-    ttk::treeview $w.fengines.lbEngines -columns {0} -show {} -selectmode browse \
-        -yscrollcommand "$w.fengines.ybar set"
-    $w.fengines.lbEngines column 0 -width 100
-    $w.fengines.lbEngines configure -height 5
-    ttk::scrollbar $w.fengines.ybar -command "$w.fengines.lbEngines yview"
-    pack $w.fengines.eng -side top -anchor w
-    pack $w.fengines.ybar -side right -fill y
-    pack $w.fengines.lbEngines -side left -fill both -expand yes
-    pack $w.fengines -expand yes -fill both -side top
-    set i 0
-    set idx 0
-    foreach e $::engines(list) {
-      if { [lindex $e 7] != 1} { incr idx ; continue }
-      set ::calvar::engineListBox($i) $idx
-      set name [lindex $e 0]
-      $w.fengines.lbEngines insert {} end -id $idx -values [list $name]
-      incr i
-      incr idx
-    }
-    $w.fengines.lbEngines selection set 0
-
-    # if no engines defined, bail out
-    if {$i == 0} {
-      tk_messageBox -type ok -message "No UCI engine defined" -icon error
-      destroy $w
-      return
-    }
-
+    ::engineNoWin::createEngineOptionsFrame $w calcvarEngine ::calvar::engineName 5 ::calvar::eng_messages
+    pack $w.calcvarEngine -in $w.fengines -side top -pady 5 -anchor w -padx 4
+    grid $w.fengines -row 0 -column 0 -pady { 0 10 } -sticky nswe -padx { 0 10 }
     # parameters setting
     set f $w.parameters
     ttk::frame $w.parameters
-    pack $f -side top -anchor w -pady 10
+    grid $f -row 1 -column 0 -sticky nswe -padx { 0 10 }
     ttk::label $f.lTime -text $::tr(SecondsPerMove)
-    ttk::spinbox $f.sbTime -width 3 -textvariable ::calvar::thinkingTimePerLine -from 5 -to 120 -increment 5 -validate all -validatecommand { regexp {^[0-9]+$} %P }
+    ttk::spinbox $f.sbTime -width 3 -textvariable ::calvar::thinkingTimePerLine -from 1 -to 120 -increment 1 -validate all -validatecommand { regexp {^[0-9]+$} %P }
     ttk::label $f.lTime2 -text "Position thinking time"
-    ttk::spinbox $f.sbTime2 -width 3 -textvariable ::calvar::thinkingTimePosition -from 5 -to 300 -increment 5 -validate all -validatecommand { regexp {^[0-9]+$} %P }
+    ttk::spinbox $f.sbTime2 -width 3 -textvariable ::calvar::thinkingTimePosition -from 1 -to 300 -increment 1 -validate all -validatecommand { regexp {^[0-9]+$} %P }
     grid $f.lTime -column 0 -row 0 -sticky w
     grid $f.sbTime -column 1 -row 0 -padx 10 -pady 5
     grid $f.lTime2 -column 0 -row 1 -sticky w
     grid $f.sbTime2 -column 1 -row 1 -padx 10
 
     ttk::frame $w.fbuttons
-    pack $w.fbuttons -expand yes -fill both
+    grid $w.fbuttons -row 2 -column 0 -sticky se -padx { 0 10 }
     ttk::button $w.fbuttons.start -text Start -command {
       focus .
-      set chosenEngine [.configCalvarWin.fengines.lbEngines selection]
-      set ::calvar::engineName [.configCalvarWin.fengines.lbEngines set $chosenEngine 0]
-      destroy .configCalvarWin
-      ::calvar::start $chosenEngine
+      set callback [list ::calvar::eng_messages calvarEngine nop]
+      if { [::engineNoWin::initEngine calvarEngine $::calvar::engineName $callback "MultiPV 10"] } {
+          destroy .configCalvarWin
+          ::calvar::start calvarEngine
+      }
     }
     ttk::button $w.fbuttons.cancel -textvar ::tr(Cancel) -command "focus .; destroy $w"
 
@@ -138,12 +114,39 @@ namespace eval calvar {
     bind $w <Return> { .configCalvarWin.fbuttons.start invoke }
     bind $w <Destroy> ""
     bind $w <Configure> "recordWinSize $w"
-    wm minsize $w 45 0
+    wm resizable $w 0 0
   }
+
+  proc ::calvar::eng_messages {id w msg} {
+      lassign $msg msgType msgData
+      switch $msgType {
+          "InfoConfig" {
+              if { ! [winfo exists $w] } { return }
+              set msgData [lindex $msgData 2]
+              ::engineNoWin::initEngineOptions $id $w $msgData
+          }
+          "InfoPV" {
+              # no coach engine then use score from playing engine
+              lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
+              set ::calvar::data(pv$multipv) [list $depth $score $pv]
+              set ::sergame::data(score) [expr $score / 100.0]
+          }
+          "InfoBestMove" {
+              lassign $msgData ::calvar::data(bestmove) ponder ::calvar::data(ponder)
+          }
+          "InfoDisconnected" {
+              lassign $msgData errorMsg
+              if {$errorMsg eq ""} { set errorMsg "The connection with the engine terminated unexpectedly." }
+              tk_messageBox -icon warning -type ok -parent . -message $errorMsg
+              ::sergame::abortGame
+          }
+      }
+  }
+
   ################################################################################
   #
   ################################################################################
-  proc start { engine { n 4 } } {
+  proc start { engine } {
 
     ::calvar::reset
 
@@ -153,6 +156,7 @@ namespace eval calvar {
       return
     }
     createToplevel $w
+    applyThemeColor_background $w
     ::setTitle $w [::tr "Calvar"]
     bind $w <F1> { helpWindow CalVar }
 
@@ -164,14 +168,12 @@ namespace eval calvar {
       pack $f.nag$i -side left
       incr i
     }
-    pack $f -expand 1 -fill both
 
     set f $w.fText
     ttk::frame $f
     text $f.t -height 12 -width 50
     applyThemeStyle Treeview $f.t
     pack $f.t -expand 1 -fill both
-    pack $f -expand 1 -fill both
 
     set f $w.fPieces
     ttk::frame $f
@@ -181,30 +183,24 @@ namespace eval calvar {
       ttk::button $f.p$piece -image w${piece}20 -command "::calvar::promo $piece"
       pack $f.p$piece -side left
     }
-    pack $f -expand 1 -fill both
 
     set f $w.fCommand
     ttk::frame $f
     ttk::button $f.bDone -text [::tr "DoneWithPosition"] -command ::calvar::positionDone
     pack $f.bDone
-    pack $f -expand 1 -fill both
 
     set f $w.fbuttons
     ttk::frame $f
-    pack $f -expand 1 -fill both
     ttk::button $w.fbuttons.stop -textvar ::tr(Stop) -command "::calvar::stop"
     pack $w.fbuttons.stop -expand yes -side left -padx 20 -pady 2
+
+    pack $w.fNag $w.fText $w.fPieces $w.fCommand $w.fbuttons -side top -fill both -pady { 5 5 }
 
     bind $w <Escape> { .calvarWin.fbuttons.stop invoke }
     bind $w <Destroy> ""
     bind $w <Configure> "recordWinSize $w"
     wm minsize $w 45 0
 
-    # start engine and set MultiPV to 10
-    ::uci::startEngine $::calvar::engineListBox($engine) $n
-
-    set ::analysis(multiPVCount$n) 10
-    ::uci::sendToEngine $n "setoption name MultiPV value $::analysis(multiPVCount$n)"
     set ::calvar::suggestMoves_old $::suggestMoves
     set ::calvar::hideNextMove_old $::gameInfo(hideNextMove)
 
@@ -213,19 +209,19 @@ namespace eval calvar {
     updateBoard
 
     # fill initPosAnalysis for the current position
-    set ::calvar::working 1
     ::calvar::startAnalyze "" "" [sc_pos fen]
 
-    set ::calvar::afterIdPosition [after [expr $::calvar::thinkingTimePosition * 1000] { ::calvar::stopAnalyze "" "" "" ; ::calvar::addLineToCompute "" }]
+#    set ::calvar::afterIdPosition [after [expr $::calvar::thinkingTimePosition * 1000] { ::calvar::stopAnalyze "" "" "" ; ::calvar::addLineToCompute "" }]
     ::createToplevelFinalize $w
   }
   ################################################################################
   #
   ################################################################################
-  proc stop { {n  4 } } {
+  proc stop { } {
     after cancel $::calvar::afterIdPosition
     after cancel $::calvar::afterIdLine
-    ::uci::closeUCIengine $n
+    ::engine::close calvarEngine
+    unset ::enginewin::engConfig_calvarEngine
     focus .
     destroy .calvarWin
     set ::suggestMoves $::calvar::suggestMoves_old
@@ -277,7 +273,7 @@ namespace eval calvar {
   ################################################################################
   #
   ################################################################################
-  proc addLineToCompute {line {n 4} } {
+  proc addLineToCompute {line } {
     global ::calvar::analysisQueue
     if {$line != ""} {
       lappend analysisQueue $line
@@ -293,45 +289,35 @@ namespace eval calvar {
   ################################################################################
   #
   ################################################################################
-  proc computeLine {line {n 4} } {
-    set ::calvar::working 1
+  proc computeLine {line } {
     set moves [ lindex $line 0 ]
     set nag [ lindex $line 1 ]
     set fen [ lindex $line 2 ]
     startAnalyze $moves $nag $fen
-    set ::calvar::afterIdLine [after [expr $::calvar::thinkingTimePerLine * 1000] "::calvar::stopAnalyze [list $moves $nag $fen]"]
+ #   set ::calvar::afterIdLine [after [expr $::calvar::thinkingTimePerLine * 1000] "::calvar::stopAnalyze [list $moves $nag $fen]"]
   }
   ################################################################################
   # we suppose FEN has not changed !
   ################################################################################
-  proc handleResult {moves nag fen {n 4} } {
+  proc handleResult {moves nag fen } {
     set comment ""
 
     set usermoves [::uci::formatPv $moves $fen]
     set firstmove [lindex $usermoves 0]
-
-    # format engine's output
-    # append first move to the variations
-    set ::analysis(multiPV$n) {}
-    for {set i 0 } {$i < [llength $::analysis(multiPVraw$n)]} {incr i} {
-      set elt [lindex $::analysis(multiPVraw$n) $i ]
-      set line [::uci::formatPvAfterMoves $firstmove [lindex $elt 2] ]
-      set line "$firstmove $line"
-      lappend ::analysis(multiPV$n) [list [lindex $elt 0] [lindex $elt 1] $line [lindex $elt 3]]
-    }
 
     if { [llength $moves] != [llength $usermoves]} {
       set comment " error in user moves [lrange $moves [llength $usermoves] end ]"
       puts $comment
     }
 
-    set pv [ lindex $::analysis(multiPV$n) 0 ]
-    if { [ llength $pv ] == 4 } {
+    set pv [ lindex $::analysis(multiPV) 0 ]
+    if { [ llength $pv ] >=3 } {
       set engmoves [lindex $pv 2]
       # score is computed for the opposite side, so invert it
-      set engscore [expr - 1.0 * [lindex $pv 1] ]
+      set engscore [expr [lindex $pv 1] / 100.0 ]
+      set engscore [expr - 1.0 * $engscore ]
       set engdepth [lindex $pv 0]
-      addVar $usermoves $engmoves $nag $comment $engscore
+      addVar $usermoves "$firstmove $engmoves" $nag $comment $engscore
     } else  {
       puts "Error pv = $pv"
     }
@@ -399,7 +385,7 @@ namespace eval calvar {
 
     sc_var create
     if {$repeat_move != ""} {sc_move addSan $repeat_move}
-    sc_pos setComment "Missed line ($depth) $score"
+    sc_pos setComment "Missed line ($depth) [expr $score / 100.0]"
     sc_move addSan $moves
     sc_var exit
     if {$repeat_move != ""} { sc_move forward }
@@ -446,40 +432,34 @@ namespace eval calvar {
   #   Put the engine in analyze mode and ponder on the first move entered by the user to see
   # if the line's evaluation is coherent
   ################################################################################
-  proc startAnalyze {moves nag fen {n 4}} {
-    global analysis
-
+  proc startAnalyze {moves nag fen } {
     # Check that the engine has not already had analyze mode started:
-    if {$analysis(analyzeMode$n)} { return }
-    set analysis(analyzeMode$n) 1
-    set analysis(waitForReadyOk$n) 1
-    ::uci::sendToEngine $n "isready"
-    vwait analysis(waitForReadyOk$n)
-    set analysis(fen$n) $fen
     if { [llength $moves] > 0 } {
-      ::uci::sendToEngine $n "position fen $fen moves [lindex $moves 0]"
+      set time [expr $::calvar::thinkingTimePerLine * 1000]
+      set pos "position fen $fen moves [lindex $moves 0]"
     } else {
-      ::uci::sendToEngine $n "position fen $fen"
+      set time [expr $::calvar::thinkingTimePosition * 1000]
+      set pos "position fen $fen"
     }
-    ::uci::sendToEngine $n "go infinite"
-  }
-  ################################################################################
-  # stopAnalyzeMode
-  ################################################################################
-  proc stopAnalyze { moves nag fen {n 4} } {
-    if {! $::analysis(analyzeMode$n)} { return }
-    set ::analysis(analyzeMode$n) 0
-    ::uci::sendToEngine $n "stop"
-
+    set ::calvar::working 1
+    ::engine::send calvarEngine Go [list $pos "movetime $time"]
+    vwait ::calvar::data(bestmove)
+    set ::calvar::working 0
+    set ::analysis(multiPV) {}
+    set i 1
+    while { [info exists ::calvar::data(pv$i)] } {
+        lappend ::analysis(multiPV) $::calvar::data(pv$i)
+        unset ::calvar::data(pv$i)
+        incr i
+    }
     if { [llength $moves] > 0 } {
       handleResult $moves $nag $fen
     } else {
-      set ::calvar::initPosAnalysis $::analysis(multiPV$n)
+        set ::calvar::initPosAnalysis $::analysis(multiPV)
     }
-    set ::calvar::working 0
     addLineToCompute ""
-  }
 
+  }
 }
 ###
 ### End of file: calvar.tcl
