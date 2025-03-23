@@ -262,6 +262,10 @@ namespace eval calvar {
   # This will end a line, and start engine computation
   ################################################################################
   proc nag { n } {
+    if { $::calvar::midmove ne "" } {
+        tk_messageBox -type ok -message "Move incomplete." -parent .main -icon info
+        return
+    }
     .calvarWin.fText.t insert "$::calvar::currentLine.end" " $n\n"
     set newline [list $::calvar::currentListMoves $n [sc_pos fen]]
     lappend ::calvar::lines $newline
@@ -289,15 +293,7 @@ namespace eval calvar {
   # we suppose FEN has not changed !
   ################################################################################
   proc handleResult {moves nag fen } {
-    set comment ""
-
-    set usermoves [::uci::formatPv $moves $fen]
-    set firstmove [lindex $usermoves 0]
-
-    if { [llength $moves] != [llength $usermoves]} {
-      set comment " error in user moves [lrange $moves [llength $usermoves] end ]"
-      puts $comment
-    }
+    set firstmove [lindex $moves 0]
 
     set pv [ lindex $::analysis(multiPV) 0 ]
     if { [ llength $pv ] >=3 } {
@@ -305,7 +301,7 @@ namespace eval calvar {
       # score is computed for the opposite side, so invert it
       set engscore [expr - 1.0 * [lindex $pv 1]]
       set engdepth [lindex $pv 0]
-      addVar $usermoves "$firstmove $engmoves" $nag $comment $engscore
+      addVar $moves "$firstmove $engmoves" $nag $engscore
     } else  {
       puts "Error pv = $pv"
     }
@@ -314,7 +310,7 @@ namespace eval calvar {
   # will add a variation at current position.
   # Try to merge the variation with an existing one.
   ################################################################################
-  proc addVar {usermoves engmoves nag comment engscore} {
+  proc addVar {usermoves engmoves nag engscore} {
     # Cannot add a variation to an empty variation:
     if {[sc_pos isAt vstart]  &&  [sc_pos isAt vend]} {
       # enter the first move as dummy variation
@@ -332,9 +328,8 @@ namespace eval calvar {
     # first enter the user moves
     sc_var create
     if {$repeat_move != ""} {sc_move addSan $repeat_move}
-    sc_move addSan $usermoves
-    if {$comment != ""} {
-      sc_pos setComment $comment
+    if { [catch { sc_move addSan $usermoves }] } {
+        sc_pos setComment " error in user moves $usermoves"
     }
 
     sc_pos addNag $nag
@@ -344,7 +339,9 @@ namespace eval calvar {
     if {$repeat_move != ""} {sc_move forward}
     sc_var create
     sc_pos setComment "$::calvar::engineName : \[%eval $engscore\]"
-    sc_move addSan $engmoves
+    if { [catch { sc_move addSan $engmoves }] } {
+        sc_pos setComment "Wrong first user move. $::calvar::engineName : $engmoves ignored"
+    }
     sc_var exit
     sc_var exit
 
