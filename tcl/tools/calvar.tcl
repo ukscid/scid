@@ -10,7 +10,6 @@ namespace eval calvar {
   # DEBUG
   set ::uci::uciInfo(log_stdout4) 0
 
-  array set engineListBox {}
   set thinkingTimePerLine 3
   set thinkingTimePosition 10
   set currentLine 1
@@ -26,7 +25,6 @@ namespace eval calvar {
   set working 0
   set midmove ""
 
-  set afterIdPosition 0
   set afterIdLine 0
 
   trace add variable ::calvar::working write { ::calvar::traceWorking }
@@ -209,7 +207,7 @@ namespace eval calvar {
     updateBoard
 
     # fill initPosAnalysis for the current position
-    ::calvar::startAnalyze "" "" [sc_pos fen]
+    ::calvar::doAnalyze "" "" [sc_pos fen]
 
     ::createToplevelFinalize $w
   }
@@ -217,7 +215,6 @@ namespace eval calvar {
   #
   ################################################################################
   proc stop { } {
-    after cancel $::calvar::afterIdPosition
     after cancel $::calvar::afterIdLine
     ::engine::close calvarEngine
     unset ::enginewin::engConfig_calvarEngine
@@ -263,7 +260,7 @@ namespace eval calvar {
   ################################################################################
   proc nag { n } {
     if { $::calvar::midmove ne "" } {
-        tk_messageBox -type ok -message "Move incomplete." -parent .main -icon info
+        tk_messageBox -type ok -message "Move incomplete." -parent .main -icon warning
         return
     }
     .calvarWin.fText.t insert "$::calvar::currentLine.end" " $n\n"
@@ -286,7 +283,7 @@ namespace eval calvar {
     if { [llength $analysisQueue] != 0 } {
       set line [lindex $analysisQueue 0]
       set analysisQueue [lreplace $analysisQueue 0 0]
-      startAnalyze [lindex $line 0] [lindex $line 1] [lindex $line 2]
+      doAnalyze [lindex $line 0] [lindex $line 1] [lindex $line 2]
     }
   }
   ################################################################################
@@ -295,7 +292,7 @@ namespace eval calvar {
   proc handleResult {moves nag fen } {
     set firstmove [lindex $moves 0]
 
-    set pv [ lindex $::analysis(multiPV) 0 ]
+    set pv [ lindex $::calvar::data(allPV) 0 ]
     if { [ llength $pv ] >=3 } {
       set engmoves [lindex $pv 2]
       # score is computed for the opposite side, so invert it
@@ -412,12 +409,23 @@ namespace eval calvar {
     }
     ::calvar::reset
   }
+
+  # join all single PVn to one list
+  proc joinMultiPV { } {
+    set ::calvar::data(allPV) {}
+    set i 1
+    while { [info exists ::calvar::data(pv$i)] } {
+        lappend ::calvar::data(allPV) $::calvar::data(pv$i)
+        unset ::calvar::data(pv$i)
+        incr i
+    }
+  }
   ################################################################################
-  # startAnalyze:
+  # doAnalyze:
   # Put the engine in analyze mode and ponder on the first move entered by the user to see
   # if the line's evaluation is coherent
   ################################################################################
-  proc startAnalyze {moves nag fen } {
+  proc doAnalyze {moves nag fen } {
     # Check that the engine has not already had analyze mode started:
     if { [llength $moves] > 0 } {
       set time [expr $::calvar::thinkingTimePerLine * 1000]
@@ -426,24 +434,19 @@ namespace eval calvar {
       set time [expr $::calvar::thinkingTimePosition * 1000]
       set pos "position fen $fen"
     }
+
     set ::calvar::working 1
     ::engine::send calvarEngine Go [list $pos "movetime $time"]
     vwait ::calvar::data(bestmove)
     set ::calvar::working 0
-    set ::analysis(multiPV) {}
-    set i 1
-    while { [info exists ::calvar::data(pv$i)] } {
-        lappend ::analysis(multiPV) $::calvar::data(pv$i)
-        unset ::calvar::data(pv$i)
-        incr i
-    }
+    joinMultiPV
+
     if { [llength $moves] > 0 } {
       handleResult $moves $nag $fen
     } else {
-        set ::calvar::initPosAnalysis $::analysis(multiPV)
+        set ::calvar::initPosAnalysis $::calvar::data(allPV)
     }
     addLineToCompute ""
-
   }
 }
 ###
