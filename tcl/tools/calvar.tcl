@@ -185,14 +185,10 @@ namespace eval calvar {
     set f $w.fCommand
     ttk::frame $f
     ttk::button $f.bDone -text [::tr "DoneWithPosition"] -command ::calvar::positionDone
-    pack $f.bDone
+    ttk::button $f.stop -textvar ::tr(Stop) -command "::calvar::stop"
+    pack $f.stop $f.bDone -side right -anchor e -padx { 20 0 }
 
-    set f $w.fbuttons
-    ttk::frame $f
-    ttk::button $w.fbuttons.stop -textvar ::tr(Stop) -command "::calvar::stop"
-    pack $w.fbuttons.stop -expand yes -side left -padx 20 -pady 2
-
-    pack $w.fNag $w.fText $w.fPieces $w.fCommand $w.fbuttons -side top -fill both -pady { 5 5 }
+    pack $w.fNag $w.fText $w.fPieces $w.fCommand -side top -fill both -pady { 5 5 }
 
     bind $w <Escape> { .calvarWin.fbuttons.stop invoke }
     bind $w <Destroy> ""
