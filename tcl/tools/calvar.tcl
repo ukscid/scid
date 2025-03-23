@@ -43,11 +43,10 @@ namespace eval calvar {
   #
   ################################################################################
   proc reset {} {
-    set currentLine 1
-    set currentListMoves {}
-    set lines {}
-    set working 0
-    set analysisQueue {}
+    set ::calvar::currentLine 1
+    set ::calvar::currentListMoves {}
+    set ::calvar::lines {}
+    set ::calvar::analysisQueue {}
     set ::calvar::initPosAnalysis {}
     if {[winfo exists .calvarWin]} {
       .calvarWin.fText.t delete 1.0 end
@@ -125,7 +124,6 @@ namespace eval calvar {
               ::engineNoWin::initEngineOptions $id $w $msgData
           }
           "InfoPV" {
-              # no coach engine then use score from playing engine
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
               set ::calvar::data(pv$multipv) [list $depth [expr $score / 100.0] $pv]
           }
