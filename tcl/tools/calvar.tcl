@@ -50,6 +50,7 @@ namespace eval calvar {
     set lines {}
     set working 0
     set analysisQueue {}
+    set ::calvar::initPosAnalysis {}
     if {[winfo exists .calvarWin]} {
       .calvarWin.fText.t delete 1.0 end
     }
@@ -128,8 +129,7 @@ namespace eval calvar {
           "InfoPV" {
               # no coach engine then use score from playing engine
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
-              set ::calvar::data(pv$multipv) [list $depth $score $pv]
-              set ::sergame::data(score) [expr $score / 100.0]
+              set ::calvar::data(pv$multipv) [list $depth [expr $score / 100.0] $pv]
           }
           "InfoBestMove" {
               lassign $msgData ::calvar::data(bestmove) ponder ::calvar::data(ponder)
@@ -211,7 +211,6 @@ namespace eval calvar {
     # fill initPosAnalysis for the current position
     ::calvar::startAnalyze "" "" [sc_pos fen]
 
-#    set ::calvar::afterIdPosition [after [expr $::calvar::thinkingTimePosition * 1000] { ::calvar::stopAnalyze "" "" "" ; ::calvar::addLineToCompute "" }]
     ::createToplevelFinalize $w
   }
   ################################################################################
@@ -278,23 +277,13 @@ namespace eval calvar {
     if {$line != ""} {
       lappend analysisQueue $line
     }
-    if { $::calvar::working } { return }
+    if { $::calvar::working } { set ::calvar::afterIdLine [after 1000 {::calvar::addLineToCompute ""}]; return }
 
-    while { [llength $analysisQueue] != 0 } {
+    if { [llength $analysisQueue] != 0 } {
       set line [lindex $analysisQueue 0]
-      set analysisQueue [lreplace analysisQueue 0 0]
-      computeLine $line
+      set analysisQueue [lreplace $analysisQueue 0 0]
+      startAnalyze [lindex $line 0] [lindex $line 1] [lindex $line 2]
     }
-  }
-  ################################################################################
-  #
-  ################################################################################
-  proc computeLine {line } {
-    set moves [ lindex $line 0 ]
-    set nag [ lindex $line 1 ]
-    set fen [ lindex $line 2 ]
-    startAnalyze $moves $nag $fen
- #   set ::calvar::afterIdLine [after [expr $::calvar::thinkingTimePerLine * 1000] "::calvar::stopAnalyze [list $moves $nag $fen]"]
   }
   ################################################################################
   # we suppose FEN has not changed !
@@ -314,8 +303,7 @@ namespace eval calvar {
     if { [ llength $pv ] >=3 } {
       set engmoves [lindex $pv 2]
       # score is computed for the opposite side, so invert it
-      set engscore [expr [lindex $pv 1] / 100.0 ]
-      set engscore [expr - 1.0 * $engscore ]
+      set engscore [expr - 1.0 * [lindex $pv 1]]
       set engdepth [lindex $pv 0]
       addVar $usermoves "$firstmove $engmoves" $nag $comment $engscore
     } else  {
@@ -355,7 +343,7 @@ namespace eval calvar {
     while {![sc_pos isAt vstart] } {sc_move back}
     if {$repeat_move != ""} {sc_move forward}
     sc_var create
-    sc_pos setComment  "$::calvar::engineName : $engscore"
+    sc_pos setComment "$::calvar::engineName : \[%eval $engscore\]"
     sc_move addSan $engmoves
     sc_var exit
     sc_var exit
@@ -385,7 +373,7 @@ namespace eval calvar {
 
     sc_var create
     if {$repeat_move != ""} {sc_move addSan $repeat_move}
-    sc_pos setComment "Missed line ($depth) [expr $score / 100.0]"
+    sc_pos setComment "Missed line ($depth) \[%eval $score\]"
     sc_move addSan $moves
     sc_var exit
     if {$repeat_move != ""} { sc_move forward }
@@ -406,7 +394,7 @@ namespace eval calvar {
       set res 0
       set firsteng [lindex $engmoves 0]
       foreach userLine $::calvar::lines {
-        set usermoves [::uci::formatPv [lindex $userLine 0]]
+        set usermoves [lindex $userLine 0]
         set firstuser [lindex $usermoves 0]
         if {$firstuser == $firsteng} { return 1 }
       }
@@ -429,7 +417,7 @@ namespace eval calvar {
   }
   ################################################################################
   # startAnalyze:
-  #   Put the engine in analyze mode and ponder on the first move entered by the user to see
+  # Put the engine in analyze mode and ponder on the first move entered by the user to see
   # if the line's evaluation is coherent
   ################################################################################
   proc startAnalyze {moves nag fen } {
