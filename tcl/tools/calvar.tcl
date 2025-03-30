@@ -79,12 +79,12 @@ namespace eval calvar {
     # builds the list of UCI engines
     ttk::frame $w.fengines
     ::engineNoWin::createEngineOptionsFrame $w calcvarEngine ::calvar::engineName 5 ::calvar::eng_messages
-    pack $w.calcvarEngine -in $w.fengines -side top -pady 5 -anchor w -padx 4
-    grid $w.fengines -row 0 -column 0 -pady { 0 10 } -sticky nswe -padx { 0 10 }
+    pack $w.calcvarEngine -in $w.fengines -side top -anchor w -padx 4
+    grid $w.fengines -row 0 -column 0 -pady { 0 10 } -sticky nswe
     # parameters setting
     set f $w.parameters
     ttk::frame $w.parameters
-    grid $f -row 1 -column 0 -sticky nswe -padx { 0 10 }
+    grid $f -row 1 -column 0 -sticky nswe
     ttk::label $f.lTime -text $::tr(SecondsPerMove)
     ttk::spinbox $f.sbTime -width 3 -textvariable ::calvar::thinkingTimePerLine -from 1 -to 120 -increment 1 -validate all -validatecommand { regexp {^[0-9]+$} %P }
     ttk::label $f.lTime2 -text "Position thinking time"
@@ -95,7 +95,7 @@ namespace eval calvar {
     grid $f.sbTime2 -column 1 -row 1 -padx 10
 
     ttk::frame $w.fbuttons
-    grid $w.fbuttons -row 2 -column 0 -sticky se -padx { 0 10 }
+    grid $w.fbuttons -row 3 -column 0 -sticky se -pady { 10 0 }
     ttk::button $w.fbuttons.start -text Start -command {
       focus .
       set callback [list ::calvar::eng_messages calvarEngine nop]
@@ -106,7 +106,7 @@ namespace eval calvar {
     }
     ttk::button $w.fbuttons.cancel -textvar ::tr(Cancel) -command "focus .; destroy $w"
 
-    packdlgbuttons $w.fbuttons.cancel $w.fbuttons.start
+    pack $w.fbuttons.cancel $w.fbuttons.start -side right -anchor se -padx 5
 
     bind $w <Escape> { .configCalvarWin.fbuttons.cancel invoke }
     bind $w <Return> { .configCalvarWin.fbuttons.start invoke }
