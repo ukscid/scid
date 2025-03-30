@@ -6,11 +6,11 @@
 #
 
 namespace eval reviewgame {
-  set engineSlot 6
   set window ".reviewgame"
   set timeShort 3
   set timeExtended 15
   set margin 0.3
+  set engineName ""
   set prevFen ""
   set sequence 0
   
@@ -24,16 +24,22 @@ namespace eval reviewgame {
 #
 ################################################################################
 proc ::reviewgame::start {} {
+  set w $::reviewgame::window
+#  win::createDialog $w
+  createToplevel $w
+  applyThemeColor_background $w
+  setTitle $w [::tr "GameReview" ]
+
+  # builds the list of UCI engines
+  ttk::frame $w.fengines
+  ::engineNoWin::createEngineOptionsFrame $w reviewEngine ::reviewgame::engineName 5 ::reviewgame::eng_messages
+  pack $w.reviewEngine -in $w.fengines -side top -anchor w -padx 4
+  grid $w.fengines -row 0 -column 0 -pady { 0 10 } -sticky nswe
   if { ! [::reviewgame::launchengine] } {
     tk_messageBox -type ok -icon warning -title "Scid" -message "This feature require at least one UCI engine"
     return
   }
 
-  set w $::reviewgame::window
-  createToplevel $w
-  setTitle $w [::tr "GameReview" ]
-  wm minsize $w 200 200
-  
   ttk::frame $w.fgameinfo
   set welo [sc_game tags get WhiteElo]
   set belo [sc_game tags get BlackElo]
@@ -46,7 +52,7 @@ proc ::reviewgame::start {} {
   if { $result == "=" } { set result "1/2 - 1/2" }
   ttk::label $w.fgameinfo.l2 -text "$result"
   pack $w.fgameinfo.l1 $w.fgameinfo.l2
-  pack $w.fgameinfo -expand 1 -fill both
+  grid $w.fgameinfo -row 1 -column 0 -sticky nswe
   
   ttk::frame $w.fparam
   ttk::label $w.fparam.ltime1 -text "[::tr Time] ([::tr sec])"
@@ -66,10 +72,10 @@ proc ::reviewgame::start {} {
   grid $w.fparam.lmargin -column 0 -row $row -sticky nw
   grid $w.fparam.margin -column 1 -row $row -sticky nw
   
-  pack $w.fparam -expand 1 -fill both
+  grid $w.fparam -row 2 -column 0 -sticky nswe
   
   ttk::frame $w.finfo
-  pack $w.finfo -expand 1 -fill both
+  grid $w.finfo -row 3 -column 0 -sticky nswe
   ttk::progressbar $w.finfo.pb -orient horizontal -length 300 -value 0 -mode determinate
   ttk::label $w.finfo.pblabel -image tb_stop -compound left
   ttk::label $w.finfo.sc1 -text "[::tr GameReviewEngineScore]"
@@ -107,7 +113,7 @@ proc ::reviewgame::start {} {
   grid $w.finfo.stats -column 0 -row $row -sticky nw -columnspan 2 -pady { 10 0 }
 
   ttk::frame $w.fbuttons
-  pack $w.fbuttons -fill x
+  grid $w.fbuttons -row 4 -column 0 -sticky swe
   ttk::button $w.fbuttons.close -textvar ::tr(Abort) -command ::reviewgame::endTraining
   pack $w.fbuttons.close -expand 1 -fill x
   
@@ -116,6 +122,8 @@ proc ::reviewgame::start {} {
   bind $w <Destroy> "if {\[string equal $w %W\]} {::reviewgame::endTraining}"
   bind $w <F1> { helpWindow ReviewGame }
   ::createToplevelFinalize $w
+  wm resizable $w 0 0
+
   set ::reviewgame::movesLikePlayer 0
   set ::reviewgame::movesLikeEngine 0
   set ::reviewgame::numberMovesPlayed 0
@@ -144,6 +152,30 @@ proc ::reviewgame::callback {cmd args} {
   return 0
 }
 
+  proc ::reviewgame::eng_messages {id w msg} {
+      lassign $msg msgType msgData
+      switch $msgType {
+          "InfoConfig" {
+              if { ! [winfo exists $w] } { return }
+              set msgData [lindex $msgData 2]
+              ::engineNoWin::initEngineOptions $id $w $msgData
+          }
+          "InfoPV" {
+              lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
+              set ::reviewgame::data(pv$multipv) [list $depth [expr $score / 100.0] $pv]
+          }
+          "InfoBestMove" {
+              lassign $msgData ::reviewgame::data(bestmove) ponder ::reviewgame::data(ponder)
+          }
+          "InfoDisconnected" {
+              lassign $msgData errorMsg
+              if {$errorMsg eq ""} { set errorMsg "The connection with the engine terminated unexpectedly." }
+              tk_messageBox -icon warning -type ok -parent . -message $errorMsg
+              ::sergame::abortGame
+          }
+      }
+  }
+
 ################################################################################
 #
 ################################################################################
@@ -161,14 +193,12 @@ proc ::reviewgame::endTraining {} {
   after cancel ::reviewgame::mainLoop
   set ::reviewgame::bailout 1
   set ::reviewgame::sequence 0
-  after cancel ::reviewgame::stopAnalyze
-  ::reviewgame::stopAnalyze
   focus .
   bind $w <Destroy> {}
   ::win::closeWindow $w
   ::setPlayMode ""
-  
-  catch { ::uci::closeUCIengine $::reviewgame::engineSlot }
+  ::engine::close reviewEngine
+  unset ::enginewin::engConfig_reviewEngine
 }
 ################################################################################
 #
@@ -196,7 +226,7 @@ proc ::reviewgame::mainLoop {} {
   
   # check player side, if not at bottom, flip the board
   if { ((! [::reviewgame::isPlayerTurn] && $sequence == 0) || ! [ checkConsistency ]) && \
-       [ sc_game info nextMoveNT ] != "" } {
+       [ sc_game info nextMoveUCI ] != "" } {
       ::board::flip .main.board
       set ::reviewgame::boardFlipped [::board::isFlipped .main.board]
 #      ::notify::PosChanged "" -animate
@@ -208,7 +238,7 @@ proc ::reviewgame::mainLoop {} {
   # Phase 1 : analyze the move really played during the game
   if {$sequence == 0} {
     set ::reviewgame::prevFen [sc_pos fen]
-    set ::reviewgame::movePlayed [ sc_game info nextMoveNT ]
+    set ::reviewgame::movePlayed [ sc_game info nextMoveUCI ]
     if {$::reviewgame::movePlayed == ""} {
       $w.finfo.pblabel configure -image tb_stop -text ""
       return
@@ -218,7 +248,6 @@ proc ::reviewgame::mainLoop {} {
     sc_move back
     $w.finfo.pblabel configure -image tb_stop -text "[::tr GameReviewAnalyzingMovePlayedDuringTheGame]"
     ::reviewgame::startAnalyze $::reviewgame::thinkingTime $::reviewgame::movePlayed
-    vwait ::reviewgame::sequence
     if { $::reviewgame::bailout } { return }
   }
   
@@ -226,7 +255,6 @@ proc ::reviewgame::mainLoop {} {
   if { $sequence == 1 } {
     $w.finfo.pblabel configure -image tb_stop -text "[::tr GameReviewAnalyzingThePosition]"
     ::reviewgame::startAnalyze $::reviewgame::thinkingTime
-    vwait ::reviewgame::sequence
     if { $::reviewgame::bailout } { return }
   }
   
@@ -272,14 +300,14 @@ proc ::reviewgame::checkPlayerMove {} {
   incr ::reviewgame::numberMovesPlayed
   # Phase 3 : ponder on user's move if different of best engine move and move played
   # We know user has played
-  set user_move [sc_game info previousMoveNT]
+  set user_move [sc_game info previousMoveUCI]
   set engine_move [ lindex $analysisEngine(moves,2) 0]
 
   # ponder on user's move if he did not play the same move as in match or the engine
   if {$user_move != $::reviewgame::movePlayed && $user_move != $engine_move} {
     $w.finfo.pblabel configure -image tb_stop -text "[::tr GameReviewCheckingYourMove]"
     ::reviewgame::startAnalyze $::reviewgame::thinkingTime ;#$user_move
-    vwait ::reviewgame::sequence
+#    vwait ::reviewgame::sequence
     if { $::reviewgame::bailout } { return }
     $w.finfo.pblabel configure -image tb_stop -text "[::tr GameReviewYourMoveWasAnalyzed]"
     # display user's score
@@ -339,7 +367,6 @@ proc ::reviewgame::checkPlayerMove {} {
     # Add variations for the bad move and the engine move
     sc_pos setComment "$analysisEngine(score,3)"
     sc_move addSan $analysisEngine(moves,3)
-    set ::reviewgame::sequence 2
     sc_var exit
     sc_var create
     sc_move addSan [lindex $analysisEngine(moves,2) 0]
@@ -411,25 +438,12 @@ proc ::reviewgame::resetValues {} {
 proc ::reviewgame::launchengine {} {
   global ::reviewgame::analysisEngine
   
-  ::uci::resetUciInfo $::reviewgame::engineSlot
+  set callback [list ::reviewgame::eng_messages reviewEngine nop]
   set analysisEngine(analyzeMode) 0
-  
-  # find engine
-  set engineFound 0
-  set index 0
-  foreach e $::engines(list) {
-    if {[lindex $e 7] != 0} {
-      set engineFound 1
-      break
-    }
-    incr index
+  if { [::engineNoWin::initEngine reviewEngine $::reviewgame::engineName $callback] } {
+      return 1
   }
-  if { ! $engineFound } {
-    return 0
-  }
-  
-  ::uci::startEngine $index $::reviewgame::engineSlot ;# start engine in analysis mode
-  return 1
+  return 0
 }
 
 # ======================================================================
@@ -437,7 +451,7 @@ proc ::reviewgame::launchengine {} {
 #   Send a command to a running analysis engine.
 # ======================================================================
 proc ::reviewgame::sendToEngine {text} {
-  ::uci::sendToEngine $::reviewgame::engineSlot $text
+#  ::uci::sendToEngine $::reviewgame::engineSlot $text
 }
 
 # ======================================================================
@@ -445,7 +459,7 @@ proc ::reviewgame::sendToEngine {text} {
 #   Put the engine in analyze mode, from current position after move played (in UCI format), time is in seconds
 # ======================================================================
 proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
-  global ::reviewgame::analysisEngine ::reviewgame::engineSlot
+  global ::reviewgame::analysisEngine ::reviewgame::sequence
   
   set pb $::reviewgame::window.finfo.pb
   set length [$pb cget -maximum]
@@ -457,48 +471,38 @@ proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
     ::reviewgame::sendToEngine "exit"
   }
   set analysisEngine(analyzeMode) 1
-  after cancel ::reviewgame::stopAnalyze
   
   # we want to ponder on a particular move, hence we need to switch to a temporary position so
   # UCI code can correctly format the variations
   if {$move != ""} {
     sc_game push copyfast
     sc_move addSan $move
-    set ::analysis(fen$engineSlot) [sc_pos fen]
+    set fen [sc_pos fen]
     sc_game pop
   } else  {
-    set ::analysis(fen$engineSlot) [sc_pos fen]
+    set fen [sc_pos fen]
   }
   
-  ::reviewgame::sendToEngine "position fen $::analysis(fen$engineSlot) $move"
-  ::reviewgame::sendToEngine "go infinite"
-  after [expr 1000 * $analysisTime] "::reviewgame::stopAnalyze $move"
-}
-# ======================================================================
-# stopAnalyzeMode:
-#   Stop the engine analyze mode
-# ======================================================================
-proc ::reviewgame::stopAnalyze { { move "" } } {
-  global ::reviewgame::analysisEngine ::reviewgame::sequence
-  
-  # Check that the engine has already had analyze mode started:
-  if { ! $analysisEngine(analyzeMode) } { return }
-  
+#  ::reviewgame::sendToEngine "position fen $::analysis(fen$engineSlot) $move"
+#  ::reviewgame::sendToEngine "go infinite"
+#  after [expr 1000 * $analysisTime] "::reviewgame::stopAnalyze $move"
+#    set ::reviewgame::working 1
+    ::engine::send reviewEngine Go [list "position fen $fen" "movetime [expr 1000 * $analysisTime]"]
+    vwait ::reviewgame::data(bestmove)
+#    set ::reviewgame::working 0
   after cancel ::reviewgame::updateProgressBar
   if { [winfo exists $::reviewgame::window.finfo.pb]} {
     $::reviewgame::window.finfo.pb configure -value 0
   }
-
   incr ::reviewgame::sequence
-  set pv [lindex $::analysis(multiPV$::reviewgame::engineSlot) 0]
-  set analysisEngine(score,$sequence) [lindex $pv 1]
-  if { $sequence == 1 } { ;# change score to white perspective
-      set analysisEngine(score,$sequence) [expr 0 - $analysisEngine(score,$sequence)]
+  set pv $::reviewgame::data(pv1)
+
+  set analysisEngine(score,$::reviewgame::sequence) [lindex $pv 1]
+  if { $::reviewgame::sequence == 1 } { ;# change score to white perspective
+      set analysisEngine(score,$::reviewgame::sequence) [expr 0 - $analysisEngine(score,$::reviewgame::sequence)]
   }
-  set analysisEngine(moves,$sequence) [lindex $pv 2]
-  
+  set analysisEngine(moves,$::reviewgame::sequence) [lindex $pv 2]
   set analysisEngine(analyzeMode) 0
-  ::reviewgame::sendToEngine "stop"
 }
 ################################################################################
 #
