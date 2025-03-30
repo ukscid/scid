@@ -319,8 +319,11 @@ namespace eval calvar {
     # first enter the user moves
     sc_var create
     if {$repeat_move != ""} {sc_move addSan $repeat_move}
+    if { [catch { sc_pos coordToSAN "position fen [sc_pos fen]" $usermoves} line] } {
+        set line [lrange $usermoves [llength $line] end]
+    }
     if { [catch { sc_move addSan $usermoves }] } {
-        sc_pos setComment " error in user moves $usermoves"
+        sc_pos setComment " error in user moves $line"
     }
 
     sc_pos addNag $nag
