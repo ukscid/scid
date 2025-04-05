@@ -165,10 +165,9 @@ proc ::reviewgame::callback {cmd args} {
           }
           "InfoPV" {
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
+              if { $score_type eq "mate" } { set score [expr $score/abs($score) * 12700]
+              }
               set ::reviewgame::data(pv$multipv) [list $depth [expr $score / 100.0] $pv]
-          }
-          "InfoGo" {
-              lassign $msgData ::reviewgame::position
           }
           "InfoBestMove" {
               lassign $msgData ::reviewgame::data(bestmove) ponder ::reviewgame::data(ponder)
@@ -316,8 +315,6 @@ proc ::reviewgame::checkPlayerMove {} {
     ::reviewgame::startAnalyze $::reviewgame::thinkingTime ;#$user_move
     if { $::reviewgame::bailout } { return }
     $w.finfo.pblabel configure -image tb_stop -text "[::tr GameReviewYourMoveWasAnalyzed]"
-    # display user's score
-    $w.finfo.eval3 configure -text "$analysisEngine(score,2)\t[::trans $user_move]"
   }
   
   # User guessed the correct move played in game
@@ -414,11 +411,6 @@ proc ::reviewgame::updateStats {} {
 proc ::reviewgame::isGoodScore {engine player} {
   global ::reviewgame::margin
   set diff [expr abs($engine + $player)]
-  if {$diff < $margin} {
-      return 1
-  } else {
-      return 0
-  }
   if { ![::board::isFlipped .main.board] } {
     # if player plays white
     if {$player >= [expr $engine - $margin]} {
@@ -458,20 +450,8 @@ proc ::reviewgame::launchengine {} {
   return 0
 }
 
-# ======================================================================
-# sendToEngine:
-#   Send a command to a running analysis engine.
-# ======================================================================
-proc ::reviewgame::sendToEngine {text} {
-#  ::uci::sendToEngine $::reviewgame::engineSlot $text
-}
-
-# ======================================================================
-# startAnalyzeMode:
-#   Put the engine in analyze mode, from current position after move played (in UCI format), time is in seconds
-# ======================================================================
-proc formatPV { pv } {
-  set san [sc_pos coordToSAN $::reviewgame::position $pv]
+proc ::reviewgame::formatPV { fen pv } {
+  set san [sc_pos coordToSAN $fen $pv]
   set pindex [string first "." $san]
   incr pindex
   while { [string index $san $pindex] eq "." } { incr pindex }
@@ -479,6 +459,10 @@ proc formatPV { pv } {
   return $san
 }
 
+# ======================================================================
+# startAnalyzeMode:
+#   Put the engine in analyze mode, from current position after move played (in UCI format), time is in seconds
+# ======================================================================
 proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
   global ::reviewgame::analysisEngine ::reviewgame::sequence
   
@@ -487,10 +471,6 @@ proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
   set ::reviewgame::progressBarTimer  [expr ( $analysisTime * 1000 * $::reviewgame::progressBarStep ) / $length ]
   after $::reviewgame::progressBarTimer ::reviewgame::updateProgressBar
   
-  # Check that the engine has not already had analyze mode started:
-  if {$analysisEngine(analyzeMode)} {
-    ::reviewgame::sendToEngine "exit"
-  }
   set analysisEngine(analyzeMode) 1
   
   # we want to ponder on a particular move, hence we need to switch to a temporary position so
@@ -504,6 +484,7 @@ proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
     set fen [sc_pos fen]
   }
   
+  set ::reviewgame::data(pv1) ""
   ::engine::send reviewEngine Go [list "position fen $fen" "movetime [expr 1000 * $analysisTime]"]
   vwait ::reviewgame::data(bestmove)
 
@@ -514,9 +495,13 @@ proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
   incr ::reviewgame::sequence
   set pv $::reviewgame::data(pv1)
 
-  set analysisEngine(score,$::reviewgame::sequence) [lindex $pv 1]
-  set analysisEngine(moves,$::reviewgame::sequence) [formatPV [lindex $pv 2]]
-
+  if { $pv ne "" } {
+      set analysisEngine(score,$::reviewgame::sequence) [lindex $pv 1]
+      if { $sequence != 2 } { ; #change score to white perspective
+          set analysisEngine(score,$sequence) [expr 0 - $analysisEngine(score,$sequence)]
+      }
+      set analysisEngine(moves,$::reviewgame::sequence) [::reviewgame::formatPV $fen [lindex $pv 2]]
+  }
   set analysisEngine(analyzeMode) 0
 }
 ################################################################################
