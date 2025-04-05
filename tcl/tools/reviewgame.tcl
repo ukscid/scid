@@ -14,8 +14,6 @@ namespace eval reviewgame {
   set prevFen ""
   set sequence 0
   
-  array set analysisEngine {}
-  
   set progressBarStep 1
   set progressBarTimer 0
 }
@@ -286,7 +284,7 @@ proc ::reviewgame::mainLoop {} {
 #
 ################################################################################
 proc ::reviewgame::checkPlayerMove {} {
-  global ::reviewgame::sequence ::reviewgame::useExtendedTime ::reviewgame::analysisEngine ::animateDelay
+  global ::reviewgame::sequence ::reviewgame::useExtendedTime ::reviewgame::data ::animateDelay
   set w $::reviewgame::window
   set moveForward 1
 
@@ -307,7 +305,7 @@ proc ::reviewgame::checkPlayerMove {} {
   # Phase 3 : ponder on user's move if different of best engine move and move played
   # We know user has played
   set user_move [sc_game info previousMoveNT]
-  set engine_move [ lindex $analysisEngine(moves,2) 0]
+  set engine_move [ lindex $data(moves,2) 0]
 
   # ponder on user's move if he did not play the same move as in match or the engine
   if {$user_move != $::reviewgame::movePlayed && $user_move != $engine_move} {
@@ -322,7 +320,7 @@ proc ::reviewgame::checkPlayerMove {} {
     set ::reviewgame::sequence 0
     
     $w.finfo.sc3 configure -text "[::tr GameReviewYouPlayedSameMove]" -foreground "sea green"
-    set result "$analysisEngine(score,1)\t[::trans $::reviewgame::movePlayed]"
+    set result "$data(score,1)\t[::trans $::reviewgame::movePlayed]"
     $w.finfo.eval3 configure -text $result
     if { ! $::reviewgame::solutionDisplayed } {
       incr ::reviewgame::movesLikePlayer
@@ -331,19 +329,19 @@ proc ::reviewgame::checkPlayerMove {} {
     # display played move score
     $w.finfo.eval2 configure -text $result
     # display engine's score
-    $w.finfo.eval1 configure -text "$analysisEngine(score,2)\t[::trans [lindex $analysisEngine(moves,2) 0]]"
+    $w.finfo.eval1 configure -text "$data(score,2)\t[::trans [lindex $data(moves,2) 0]]"
     set sequence 0
-  } elseif { $user_move == $engine_move || [ isGoodScore $analysisEngine(score,2) $analysisEngine(score,3)  ] } {
+  } elseif { $user_move == $engine_move || [ isGoodScore $data(score,2) $data(score,3)  ] } {
     set ::reviewgame::sequence 0
     
     # User guessed engine's move
     if {$user_move == $engine_move} {
       $w.finfo.sc3 configure -text "[::tr GameReviewYouPlayedLikeTheEngine]" -foreground "sea green"
-      $w.finfo.eval3 configure -text "$analysisEngine(score,2)\t[::trans $engine_move]"
+      $w.finfo.eval3 configure -text "$data(score,2)\t[::trans $engine_move]"
       incr ::reviewgame::movesLikeEngine
     } else  {
       $w.finfo.sc3 configure -text "[::tr GameReviewNotEngineMoveButGoodMove]" -foreground dodgerblue3
-      $w.finfo.eval3 configure -text "$analysisEngine(score,3)\t[::trans $user_move]"
+      $w.finfo.eval3 configure -text "$data(score,3)\t[::trans $user_move]"
     }
     sc_var exit
     # animate one move backward and one forward to show the changes to the user
@@ -356,25 +354,25 @@ proc ::reviewgame::checkPlayerMove {} {
     after $animateDelay set continueNextMove 1
     vwait continueNextMove
     # display played move score and two next game move. User can look what happend
-    $w.finfo.eval2 configure -text "$analysisEngine(score,1)\t[::trans $::reviewgame::movePlayed] $::reviewgame::nextGameMove"
+    $w.finfo.eval2 configure -text "$data(score,1)\t[::trans $::reviewgame::movePlayed] $::reviewgame::nextGameMove"
     # display engine's score
-    $w.finfo.eval1 configure -text "$analysisEngine(score,2)\t[::trans [lindex $analysisEngine(moves,2) 0]]"
+    $w.finfo.eval1 configure -text "$data(score,2)\t[::trans [lindex $data(moves,2) 0]]"
   } else  {
     # user played a bad move : comment it and restart the process
     set ::reviewgame::sequence 2
     
     $w.finfo.sc3 configure -text "[::tr GameReviewMoveNotGood]" -foreground red
-    $w.finfo.eval3 configure -text "$analysisEngine(score,3)\t[::trans $user_move]\n([::trans $analysisEngine(moves,3)])"
+    $w.finfo.eval3 configure -text "$data(score,3)\t[::trans $user_move]\n([::trans $data(moves,3)])"
     sc_pos addNag "?"
     
     # Add variations for the bad move and the engine move
-    sc_pos setComment "$analysisEngine(score,3)"
-    sc_move addSan $analysisEngine(moves,3)
+    sc_pos setComment "$data(score,3)"
+    sc_move addSan $data(moves,3)
     sc_var exit
     sc_var create
-    sc_move addSan [lindex $analysisEngine(moves,2) 0]
-    sc_pos setComment "Engine: $analysisEngine(score,2)"
-    sc_move addSan [lrange $analysisEngine(moves,2) 1 end]
+    sc_move addSan [lindex $data(moves,2) 0]
+    sc_pos setComment "Engine: $data(score,2)"
+    sc_move addSan [lrange $data(moves,2) 1 end]
     sc_var exit
     ::notify::PosChanged "" -animate
     set moveForward 0
@@ -383,9 +381,9 @@ proc ::reviewgame::checkPlayerMove {} {
     $w.finfo.extended configure -state normal
     
     # display played move score
-    $w.finfo.eval2 configure -text "$analysisEngine(score,1)"
+    $w.finfo.eval2 configure -text "$data(score,1)"
     # display engine's score
-    $w.finfo.eval1 configure -text "$analysisEngine(score,2)"
+    $w.finfo.eval1 configure -text "$data(score,2)"
   }
   if { $moveForward } {
       sc_var exit
@@ -429,7 +427,7 @@ proc ::reviewgame::isGoodScore {engine player} {
 ################################################################################
 proc ::reviewgame::resetValues {} {
   set ::reviewgame::sequence 0
-  set ::reviewgame::analysisEngine(analyzeMode) 0
+  set ::reviewgame::data(analyzeMode) 0
   set ::reviewgame::bailout 0
   set ::reviewgame::useExtendedTime 0
   set ::reviewgame::solutionDisplayed 0
@@ -440,10 +438,10 @@ proc ::reviewgame::resetValues {} {
 # in case of an error, return 0, or 1 if the engine is ok
 ################################################################################
 proc ::reviewgame::launchengine {} {
-  global ::reviewgame::analysisEngine
+  global ::reviewgame::data
   
   set callback [list ::reviewgame::eng_messages reviewEngine nop]
-  set analysisEngine(analyzeMode) 0
+  set data(analyzeMode) 0
   if { [::engineNoWin::initEngine reviewEngine $::reviewgame::engineName $callback] } {
       return 1
   }
@@ -464,14 +462,14 @@ proc ::reviewgame::formatPV { fen pv } {
 #   Put the engine in analyze mode, from current position after move played (in UCI format), time is in seconds
 # ======================================================================
 proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
-  global ::reviewgame::analysisEngine ::reviewgame::sequence
+  global ::reviewgame::data ::reviewgame::sequence
   
   set pb $::reviewgame::window.finfo.pb
   set length [$pb cget -maximum]
   set ::reviewgame::progressBarTimer  [expr ( $analysisTime * 1000 * $::reviewgame::progressBarStep ) / $length ]
   after $::reviewgame::progressBarTimer ::reviewgame::updateProgressBar
   
-  set analysisEngine(analyzeMode) 1
+  set data(analyzeMode) 1
   
   # we want to ponder on a particular move, hence we need to switch to a temporary position so
   # UCI code can correctly format the variations
@@ -496,13 +494,13 @@ proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
   set pv $::reviewgame::data(pv1)
 
   if { $pv ne "" } {
-      set analysisEngine(score,$::reviewgame::sequence) [lindex $pv 1]
+      set data(score,$::reviewgame::sequence) [lindex $pv 1]
       if { $sequence != 2 } { ; #change score to white perspective
-          set analysisEngine(score,$sequence) [expr 0 - $analysisEngine(score,$sequence)]
+          set data(score,$sequence) [expr 0 - $data(score,$sequence)]
       }
-      set analysisEngine(moves,$::reviewgame::sequence) [::reviewgame::formatPV $fen [lindex $pv 2]]
+      set data(moves,$::reviewgame::sequence) [::reviewgame::formatPV $fen [lindex $pv 2]]
   }
-  set analysisEngine(analyzeMode) 0
+  set data(analyzeMode) 0
 }
 ################################################################################
 #
@@ -521,7 +519,7 @@ proc ::reviewgame::proceed {} {
 ################################################################################
 proc ::reviewgame::extendedTime {} {
   # if already calculating, do nothing
-  if { $::reviewgame::analysisEngine(analyzeMode)} {
+  if { $::reviewgame::data(analyzeMode)} {
     return
   }
   
