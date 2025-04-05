@@ -233,7 +233,6 @@ proc ::reviewgame::mainLoop {} {
        [ sc_game info nextMoveUCI ] != "" } {
       ::board::flip .main.board
       set ::reviewgame::boardFlipped [::board::isFlipped .main.board]
-#      ::notify::PosChanged "" -animate
   }
   
   $w.finfo.proceed configure -state disabled
@@ -408,7 +407,6 @@ proc ::reviewgame::updateStats {} {
 ################################################################################
 proc ::reviewgame::isGoodScore {engine player} {
   global ::reviewgame::margin
-  set diff [expr abs($engine + $player)]
   if { ![::board::isFlipped .main.board] } {
     # if player plays white
     if {$player >= [expr $engine - $margin]} {
@@ -448,6 +446,7 @@ proc ::reviewgame::launchengine {} {
   return 0
 }
 
+#format uci pv to SAN
 proc ::reviewgame::formatPV { fen pv } {
   set san [sc_pos coordToSAN $fen $pv]
   set pindex [string first "." $san]
@@ -482,7 +481,7 @@ proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
     set fen [sc_pos fen]
   }
   
-  set ::reviewgame::data(pv1) ""
+  set data(pv1) ""
   ::engine::send reviewEngine Go [list "position fen $fen" "movetime [expr 1000 * $analysisTime]"]
   vwait ::reviewgame::data(bestmove)
 
@@ -491,7 +490,7 @@ proc ::reviewgame::startAnalyze { analysisTime { move "" } } {
     $::reviewgame::window.finfo.pb configure -value 0
   }
   incr ::reviewgame::sequence
-  set pv $::reviewgame::data(pv1)
+  set pv $data(pv1)
 
   if { $pv ne "" } {
       set data(score,$::reviewgame::sequence) [lindex $pv 1]
