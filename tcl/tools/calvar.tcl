@@ -99,7 +99,7 @@ namespace eval calvar {
     ttk::button $w.fbuttons.start -text Start -command {
       focus .
       set callback [list ::calvar::eng_messages calvarEngine nop]
-      if { [::engineNoWin::initEngine calvarEngine $::calvar::engineName $callback "MultiPV 10"] } {
+      if { [::engineNoWin::initEngine calvarEngine $::calvar::engineName $callback] } {
           destroy .configCalvarWin
           ::calvar::start calvarEngine
       }
@@ -151,6 +151,7 @@ namespace eval calvar {
       focus .calvarWin
       return
     }
+    ::engine::send calvarEngine SetOptions [list {MultiPV 10}]
     createToplevel $w
     applyThemeColor_background $w
     ::setTitle $w [::tr "Calvar"]
