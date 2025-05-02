@@ -20,7 +20,8 @@ namespace eval tactics {
     set showSolution 0
     set labelSolution ". . . . . . "
     set prevFen ""
-    set engineSlot 5
+    set engineName ""
+    set analysisTime 2000
     # Don't try to find the exact best move but to win a won game (that is a mate in 5 is ok even if there was a pending mate in 2)
     set winWonGame 0
 
@@ -151,8 +152,9 @@ namespace eval tactics {
         set fname [$win.s.bases selection]
         $win.fbutton.cancel configure -text [tr Cancel] -command "focus .; destroy $win"
         if {$fname != "" && [$win.s.bases item {*}$fname -tags] != "empty"} {
+#set $w.e.movetime.value get [ expr $::tactics::analysisTime / 1000];
             $win.fbutton.ok configure -state normal \
-                -command "set e \[$win.e.engines selection\]; destroy $win; ::tactics::createWin $fname \$e"
+                -command "destroy $win; ::tactics::createWin $fname"
             $win.fbutton.reset configure -state normal \
                 -command "::tactics::resetScores $fname; ::tactics::configValidDir $win"
         } else {
@@ -182,40 +184,17 @@ namespace eval tactics {
         $w.dummy create rectangle 0 0 0 0
 
         #Engine selection
-        grid [ttk::frame $w.sep1 -height 10] -sticky news
-        ttk::label $w.engine -font font_Bold -text "[tr Engine]:"
-        grid $w.engine -sticky we
-        grid [ttk::frame $w.e] -sticky nwes
-        ttk::treeview $w.e.engines -columns {0 1} -selectmode browse -show {} -height 4
-        $w.e.engines column 0 -width 200
-        $w.e.engines column 1 -width 400
+        ttk::labelframe $w.e -text "[tr Engine]:"
+        ::engineNoWin::createEngineOptionsFrame $w tacticEngine ::tactics::engineName 5 ::tactics::eng_messages
+        grid $w.e -sticky ws
+        pack $w.tacticEngine -in $w.e -side top -pady 5 -anchor w -padx 4
 
-        set i 0
-        set uci 0
-        foreach e $::engines(list) {
-            if {[lindex $e 7] != 0} {
-                $w.e.engines insert {} end -id $i -values [lrange $e 0 1]
-                if {$uci == 0} { $w.e.engines selection set [list $i] }
-                incr uci
-            }
-            incr i
-        }
-        if {$uci == 0} {
-            destroy $w
-            set msg "This feature require at least one UCI engine"
-            tk_messageBox -type ok -icon error -title "$::tr(ConfigureTactics)" -message $msg
-            return
-        }
-        autoscrollframe -bars both $w.e "" $w.e.engines
-
-        grid [ttk::frame $w.t] -sticky news
-        grid columnconfigure $w.t 2 -weight 1
-        ttk::label $w.t.analabel -text "[tr SecondsPerMove]: "
-        ttk::scale $w.t.analysisTime -orient horizontal -from 1 -to 60 -length 120 -variable ::tactics::analysisTime \
-                -command { ::utils::validate::roundScale ::tactics::analysisTime 1 }
-        ttk::label $w.t.value -textvar ::tactics::analysisTime
-        grid $w.t.analabel  $w.t.value $w.t.analysisTime -sticky nwes
-
+        ttk::frame $w.e.movetime
+        ttk::label $w.e.movetime.l -text "[tr SecondsPerMove]: "
+        ttk::spinbox $w.e.movetime.value -width 3 -from 1 -to 120 -increment 1 -validate all -validatecommand { regexp {^[0-9]+$} %P }
+        $w.e.movetime.value set [ expr $::tactics::analysisTime / 1000]
+        pack $w.e.movetime.l $w.e.movetime.value -side left
+        pack $w.e.movetime -side top -anchor w
 
         #BaseDir selection
         grid [ttk::frame $w.sep2 -height 20] -sticky nwes
@@ -272,19 +251,15 @@ namespace eval tactics {
     ################################################################################
     #
     ################################################################################
-    proc createWin { base engineIdx} {
+    proc createWin { base } {
         global ::tactics::analysisEngine
 
-        ::uci::resetUciInfo $::tactics::engineSlot
         set analysisEngine(analyzeMode) 0
-        progressWindow "Scid" [tr StartEngine]
-        set err [::uci::startEngine $engineIdx $::tactics::engineSlot]
-        closeProgressWindow
-        if {$err != 0} { return }
-
-        set err [::tactics::loadBase $base]
-        if {$err != 0} { return }
-
+        if { [::tactics::loadBase $base] } { return }
+        if { ! [::engineNoWin::initEngine tacticEngine $::tactics::engineName \
+                    [list ::tactics::eng_messages tacticEngine nop]] } {
+            return
+        }
 
         set w .tacticsWin
         if {[winfo exists $w]} { focus $w ; return }
@@ -326,6 +301,39 @@ namespace eval tactics {
         ::setPlayMode "::tactics::callback"
         ::tactics::loadNextGame
     }
+
+    proc ::tactics::eng_messages {id w msg} {
+        global ::tactics::analysisEngine
+        lassign $msg msgType msgData
+        switch $msgType {
+          "InfoConfig" {
+              if { ! [winfo exists $w] } { return }
+              set msgData [lindex $msgData 2]
+              ::engineNoWin::initEngineOptions $id $w $msgData
+          }
+          "InfoPV" {
+              lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
+              if { $multipv == 1 } {
+                  set analysisEngine(score) [expr $score / 100.0]
+                  set analysisEngine(moves) $pv
+              }
+          }
+          "InfoBestMove" {
+              lassign $msgData ::tactics::data(bestmove) ponder ::tactics::data(ponder)
+              set ::analysisEngine(move_done) 1
+          }
+          "InfoGo" {
+              lassign $msgData ::annotate(position)
+          }
+          "InfoDisconnected" {
+              lassign $msgData errorMsg
+              if {$errorMsg eq ""} { set errorMsg "The connection with the engine terminated unexpectedly." }
+              tk_messageBox -icon warning -type ok -parent . -message $errorMsg
+              ::tactics::abortGame
+          }
+        }
+    }
+
     proc callback {cmd args} {
         switch $cmd {
             premove { # TODO: currently we just return true if it is the engine turn.
@@ -678,13 +686,6 @@ namespace eval tactics {
         set ::tactics::infoEngineLabel $s
         .tacticsWin.f1.labelInfo configure -background $color
     }
-    # ======================================================================
-    # sendToEngine:
-    #   Send a command to a running analysis engine.
-    # ======================================================================
-    proc sendToEngine {text} {
-        ::uci::sendToEngine $::tactics::engineSlot $text
-    }
 
     # ======================================================================
     # startAnalyzeMode:
@@ -700,10 +701,12 @@ namespace eval tactics {
         }
 
         set analysisEngine(analyzeMode) 1
-        after cancel ::tactics::stopAnalyze
-        ::tactics::sendToEngine "position fen [sc_pos fen]"
-        ::tactics::sendToEngine "go infinite"
-        after [expr 1000 * $analysisTime] ::tactics::stopAnalyze
+        ::engine::send tacticEngine Go [list [sc_game UCI_currentPos] [list "movetime" $::tactics::analysisTime]]
+        vwait ::analysisEngine(move_done)
+        if {[winfo exists .tacticsWin]} {
+            setInfoEngine $::tr(AnalyzeDone) PaleGreen3
+        }
+        set analysisEngine(analyzeMode) 0
     }
     # ======================================================================
     # stopAnalyzeMode:
