@@ -315,15 +315,19 @@ namespace eval tactics {
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
               if { $multipv == 1 } {
                   set analysisEngine(score) [expr $score / 100.0]
+                  if { $score_type eq "mate" } {
+                      if { $score > 0 } {
+                          set analysisEngine(score) 512.0
+                      } else {
+                          set analysisEngine(score) -512.0
+                      }
+                  }
                   set analysisEngine(moves) $pv
               }
           }
           "InfoBestMove" {
               lassign $msgData ::tactics::data(bestmove) ponder ::tactics::data(ponder)
               set ::analysisEngine(move_done) 1
-          }
-          "InfoGo" {
-              lassign $msgData ::annotate(position)
           }
           "InfoDisconnected" {
               lassign $msgData errorMsg
@@ -352,7 +356,8 @@ namespace eval tactics {
         #TODO:
         #sc_filter release $::tactics::baseId $::tactics::filter
         sc_filter reset $::tactics::baseId dbfilter full
-        catch { ::uci::closeUCIengine $::tactics::engineSlot }
+        unset ::enginewin::engConfig_tacticEngine
+        ::engine::close tacticEngine
 
         ::setPlayMode ""
         ::board::flipAuto .main.board
@@ -541,7 +546,6 @@ namespace eval tactics {
         ::tactics::startAnalyze
 
         # now wait for the end of analyzis
-        if {$analysisEngine(analyzeMode)} { vwait ::tactics::analysisEngine(analyzeMode) }
         if {[sc_pos fen] != $::tactics::prevFen  && [sc_pos isAt start]} {
             ::tactics::abnormalContinuation
             return
@@ -565,7 +569,7 @@ namespace eval tactics {
             if { $::tactics::matePending } {
                 # continue until end of game
             } else  {
-                setInfoEngine $::tr(GoodMove)
+                setInfoEngine $::tr(GoodMove) green
                 sc_game tags set -site $::tactics::solved
                 sc_game save [sc_game number]
             }
@@ -584,43 +588,20 @@ namespace eval tactics {
         set score $analysisEngine(score)
         set line $analysisEngine(moves)
 
-        set s [ regsub -all "\[\.\]{3} " $line "" ]
-        set s [ regsub -all "\[0-9\]+\[\.\] " $s "" ]
-        set nextEngineMove [ lindex [ split $s ] 0 ]
-        set ply [ llength [split $s] ]
+        set nextEngineMove [ lindex [ split $line ] 0 ]
+        set ply [ llength [split $line] ]
 
         # check if the player played the same move predicted by engine
-        set s [ regsub -all "\[\.\]{3} " $prevLine "" ]
-        set s [ regsub -all "\[0-9\]+\[\.\] " $s "" ]
-        set prevBestMove [ lindex [ split $s ] 1 ]
-        if { [sc_game info previousMoveNT] == $prevBestMove} {
+        set prevBestMove [ lindex [ split $prevLine ] 1 ]
+        if { [sc_game info previousMoveUCI] == $prevBestMove} {
             return ""
         }
 
         # Case of mate
-        if { [string index $prevLine end] == "#"} {
+        if { [expr abs($prevScore) == 512] } {
             set matePending 1
-            #  Engine may find a mate then put a score != 300 but rather 10
-            if {[string index $line end] != "#"} {
-                # Engine line does not end with a # but the score is a mate (we can't count plies here)
-                if {[sc_pos side] == "white" && $score < -300 || [sc_pos side] == "black" && $score > 300} {
-                    return ""
-                }
-                if {! $::tactics::winWonGame } {
-                    return $::tr(MateNotFound)
-                } else  {
-                    # win won game but still have to find a mate
-                    if {[sc_pos side] == "white" && $score < -300 || [sc_pos side] == "black" && $score > 300} {
-                        return ""
-                    } else  {
-                        return $::tr(MateNotFound)
-                    }
-                }
-            }
             # Engine found a mate, search in how many plies
-            set s [ regsub -all "\[\.\]{3} " $prevLine "" ]
-            set s [ regsub -all "\[0-9\]+\[\.\] " $s "" ]
-            set prevPly [ llength [ split $s ] ]
+            set prevPly [ llength [ split $prevLine ] ]
             if { $ply > [ expr $prevPly - 1 ] && ! $::tactics::winWonGame } {
                 return $::tr(ShorterMateExists)
             } else  {
@@ -642,10 +623,11 @@ namespace eval tactics {
             if {[ expr abs($prevScore) ] > 3.0 } { set threshold 1.0 }
             if {[ expr abs($prevScore) ] > 5.0 } { set threshold 1.5 }
             # the player moved : score is from opponent side
-            if {[sc_pos side] == "white" && $score < [ expr $prevScore + $threshold ] || \
-                        [sc_pos side] == "black" && $score > [ expr $prevScore - $threshold ] } {
+            set delta [expr abs($prevScore + $score)]
+            if { $delta < $threshold } {
                 return ""
             } else  {
+                if {[sc_pos side] == "black" } { set score [expr 0.0 - $score] }
                 return "$::tr(ScorePlayed) $score\n$::tr(Expected) $prevScore"
             }
         }
@@ -697,7 +679,7 @@ namespace eval tactics {
 
         # Check that the engine has not already had analyze mode started:
         if {$analysisEngine(analyzeMode)} {
-            ::tactics::sendToEngine  "exit"
+            ::engine::send tacticEngine StopGo
         }
 
         set analysisEngine(analyzeMode) 1
@@ -713,16 +695,12 @@ namespace eval tactics {
     #   Stop the engine analyze mode
     # ======================================================================
     proc stopAnalyze { } {
-        global ::tactics::analysisEngine ::tactics::analysisTime
+        global ::tactics::analysisEngine
         # Check that the engine has already had analyze mode started:
         if {!$analysisEngine(analyzeMode)} { return }
 
-        set pv [lindex $::analysis(multiPV$::tactics::engineSlot) 0]
-        set analysisEngine(score) [lindex $pv 1]
-        set analysisEngine(moves) [lindex $pv 2]
-
+        ::engine::send tacticEngine StopGo
         set analysisEngine(analyzeMode) 0
-        ::tactics::sendToEngine  "stop"
         if {[winfo exists .tacticsWin]} {
             setInfoEngine $::tr(AnalyzeDone) PaleGreen3
         }
