@@ -316,6 +316,11 @@ namespace eval tactics {
               if { $multipv == 1 } {
                   set analysisEngine(score) [expr $score / 100.0]
                   if { $score_type eq "mate" } {
+                      if { $score == 1 || $score == -1 } {
+                          set analysisEngine(mate) 1
+                      } else {
+                          set analysisEngine(mate) 0
+                      }
                       if { $score > 0 } {
                           set analysisEngine(score) 512.0
                       } else {
@@ -605,6 +610,7 @@ namespace eval tactics {
             if { $ply > [ expr $prevPly - 1 ] && ! $::tactics::winWonGame } {
                 return $::tr(ShorterMateExists)
             } else  {
+                if { $analysisEngine(mate) } { return "You will be checkmated" }
                 return ""
             }
         } else  {
