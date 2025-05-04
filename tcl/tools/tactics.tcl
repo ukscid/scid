@@ -18,7 +18,6 @@ namespace eval tactics {
     set matePending 0
     set cancelScoreReset 0
     set showSolution 0
-    set labelSolution ". . . . . . "
     set prevFen ""
     set engineName ""
     set analysisTime 2000
@@ -266,33 +265,38 @@ namespace eval tactics {
 
         createToplevel $w .pgnWin
         setTitle $w $::tr(Tactics)
+        applyThemeColor_background $w
         # because sometimes the 2 buttons at the bottom are hidden
         wm minsize $w 170 170
-        ttk::frame $w.f1 -relief groove ;# -borderwidth 1
-        ttk::label $w.f1.labelInfo -textvariable ::tactics::infoEngineLabel -background linen
-        ttk::checkbutton $w.f1.cbWinWonGame -text $::tr(WinWonGame) -variable ::tactics::winWonGame
-        pack $w.f1.labelInfo $w.f1.cbWinWonGame -expand yes -fill both -side top
+        ttk::frame $w.f1
+        ttk::label $w.f1.labelInfo -textvariable ::tactics::infoEngineLabel
+        pack $w.f1.labelInfo -side top  -fill x
 
         ttk::frame $w.fclock
-        ::gameclock::new $w.fclock 1 80 0
+        ::gameclock::new "" 1
         ::gameclock::reset 1
         ::gameclock::start 1
+        ttk::label $w.fclock.l -text $::tr(Time)
+        ttk::label $w.fclock.time -textvariable ::gamePlayers(clockW)
+        pack $w.fclock.time $w.fclock.l -side right -fill x
 
-        ttk::frame $w.f2 -relief groove
+        ttk::frame $w.f2
         ttk::checkbutton $w.f2.cbSolution -text $::tr(ShowSolution) -variable ::tactics::showSolution -command ::tactics::toggleSolution
-        ttk::label $w.f2.lSolution -textvariable ::tactics::labelSolution -wraplength 120
-        pack $w.f2.cbSolution $w.f2.lSolution -expand yes -fill both -side top
+        ttk::checkbutton $w.f2.cbWinWonGame -text $::tr(WinWonGame) -variable ::tactics::winWonGame
+        ttk_text $w.lSolution -style Label -wrap word -relief flat -height 1 -width 40
+        pack $w.f2.cbSolution -side left -anchor w
+        pack $w.f2.cbWinWonGame -side right -anchor e
 
-        ttk::frame $w.fbuttons -relief groove -borderwidth 1
-        pack $w.f1 $w.fclock $w.f2 $w.fbuttons -expand yes -fill both
+        ttk::frame $w.fbuttons
+        pack $w.f1 $w.fclock $w.f2 $w.lSolution $w.fbuttons -fill x -padx 10 -pady 2
 
         setInfoEngine $::tr(LoadingBase)
 
-        ttk::button $w.fbuttons.next -text $::tr(Next) -command {
+        ttk::button $w.fbuttons.next -text $::tr(Next) -padding {20 0} -command {
             ::tactics::stopAnalyze
             ::tactics::loadNextGame }
-        ttk::button $w.fbuttons.close -textvar ::tr(Abort) -command "destroy $w"
-        pack $w.fbuttons.next $w.fbuttons.close -expand yes -fill both -padx 20 -pady 2
+        ttk::button $w.fbuttons.close -textvar ::tr(Abort) -padding {20 0} -command "destroy $w"
+        pack $w.fbuttons.next $w.fbuttons.close -side right -fill x -padx { 20 0 }
         bind $w <Destroy> "if {\[string equal $w %W\]} {::tactics::endTraining}"
         bind $w <F1> { helpWindow TacticsTrainer }
         createToplevelFinalize $w
@@ -363,6 +367,7 @@ namespace eval tactics {
         sc_filter reset $::tactics::baseId dbfilter full
         unset ::enginewin::engConfig_tacticEngine
         ::engine::close tacticEngine
+        ::gameclock::stop 1
 
         ::setPlayMode ""
         ::board::flipAuto .main.board
@@ -373,11 +378,17 @@ namespace eval tactics {
     #
     ################################################################################
     proc toggleSolution {} {
-        global ::tactics::showSolution ::tactics::labelSolution ::tactics::analysisEngine
+        global ::tactics::showSolution ::tactics::analysisEngine
+        set w .tacticsWin
         if {$showSolution} {
-            set labelSolution "$analysisEngine(score) : [::trans $analysisEngine(moves)]"
+            set pv [sc_pos coordToSAN [sc_pos fen] $analysisEngine(moves)]
+            set labelSolution "$analysisEngine(score) : [::trans $pv]"
+            $w.lSolution configure -height [expr int([string length $labelSolution]/50)]
+            $w.lSolution delete 1.0 end
+            $w.lSolution insert end $labelSolution
         } else  {
-            set labelSolution ". . . . . . "
+            $w.lSolution delete 0.0 end
+            $w.lSolution configure -height 1
         }
     }
     ################################################################################
@@ -664,8 +675,8 @@ namespace eval tactics {
         set ::tactics::nextEngineMove ""
         set ::tactics::matePending 0
         set ::tactics::showSolution 0
-        set ::tactics::labelSolution ""
         set ::tactics::prevFen ""
+        toggleSolution
     }
     ################################################################################
     #
