@@ -13,6 +13,7 @@ namespace eval tactics {
     set solved "problem solved"
     set failed "problem failed"
     set prevScore 0
+    set prevPly 0
     set prevLine ""
     set nextEngineMove ""
     set matePending 0
@@ -318,13 +319,11 @@ namespace eval tactics {
           "InfoPV" {
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
               if { $multipv == 1 } {
-                  set analysisEngine(score) [expr $score / 100.0]
-                  if { $score_type eq "mate" } {
-                      if { $score == 1 || $score == -1 } {
-                          set analysisEngine(mate) 1
-                      } else {
-                          set analysisEngine(mate) 0
-                      }
+                  if { $score_type ne "mate" } {
+                      set analysisEngine(score) [expr $score / 100.0]
+                      set analysisEngine(mateply) 0
+                  } else {
+                      set analysisEngine(mateply) $score
                       if { $score > 0 } {
                           set analysisEngine(score) 512.0
                       } else {
@@ -449,6 +448,7 @@ namespace eval tactics {
     #
     ################################################################################
     proc loadNextGame {} {
+        global ::tactics::analysisEngine
         ::tactics::resetValues
         setInfoEngine $::tr(LoadingGame)
 
@@ -483,6 +483,9 @@ namespace eval tactics {
 
         set ::tactics::prevFen [sc_pos fen]
         ::tactics::startAnalyze
+        #needs complement
+        set analysisEngine(score) [expr 0.0 - $analysisEngine(score)]
+        set analysisEngine(mateply) [expr 0 - $analysisEngine(mateply)]
         ::tactics::mainLoop
     }
     ################################################################################
@@ -525,7 +528,7 @@ namespace eval tactics {
     # waits for the user to play and check the move played
     ################################################################################
     proc mainLoop {} {
-        global ::tactics::prevScore ::tactics::prevLine ::tactics::analysisEngine ::tactics::nextEngineMove
+        global ::tactics::prevScore ::tactics::prevLine ::tactics::prevPly ::tactics::analysisEngine ::tactics::nextEngineMove
 
         after cancel ::tactics::mainLoop
 
@@ -559,6 +562,7 @@ namespace eval tactics {
         # the player moved and analysis is over : check if his move was as good as expected
         set prevScore $analysisEngine(score)
         set prevLine $analysisEngine(moves)
+        set prevPly $analysisEngine(mateply)
         ::tactics::startAnalyze
 
         # now wait for the end of analyzis
@@ -574,6 +578,7 @@ namespace eval tactics {
             # take back last move so restore engine status
             set analysisEngine(score) $prevScore
             set analysisEngine(moves) $prevLine
+            set analysisEngine(mateply) $prevPly
             sc_game tags set -site $::tactics::failed
             sc_move back
             updateBoard -pgn
@@ -582,9 +587,7 @@ namespace eval tactics {
             catch { sc_move addSan $nextEngineMove }
             set ::tactics::prevFen [sc_pos fen]
             updateBoard -pgn
-            if { $::tactics::matePending } {
-                # continue until end of game
-            } else  {
+            if { ! $::tactics::matePending } {
                 setInfoEngine $::tr(GoodMove) green
                 sc_game tags set -site $::tactics::solved
                 sc_game save [sc_game number]
@@ -600,12 +603,12 @@ namespace eval tactics {
     # - combination's score is close enough (within 0.5 point)
     ################################################################################
     proc foundBestLine {} {
-        global ::tactics::analysisEngine ::tactics::prevScore ::tactics::prevLine ::tactics::nextEngineMove ::tactics::matePending
+        global ::tactics::analysisEngine ::tactics::prevScore ::tactics::prevPly ::tactics::prevLine ::tactics::nextEngineMove ::tactics::matePending
         set score $analysisEngine(score)
         set line $analysisEngine(moves)
+        set ply $analysisEngine(mateply)
 
         set nextEngineMove [ lindex [ split $line ] 0 ]
-        set ply [ llength [split $line] ]
 
         # check if the player played the same move predicted by engine
         set prevBestMove [ lindex [ split $prevLine ] 1 ]
@@ -614,15 +617,15 @@ namespace eval tactics {
         }
 
         # Case of mate
-        if { [expr abs($prevScore) == 512] } {
+        if { $prevPly != 0 } {
             set matePending 1
             # Engine found a mate, search in how many plies
-            set prevPly [ llength [ split $prevLine ] ]
-            if { $ply > [ expr $prevPly - 1 ] && ! $::tactics::winWonGame } {
-                return $::tr(ShorterMateExists)
-            } else  {
-                if { $analysisEngine(mate) } { return "You will be checkmated" }
+            if { ([sc_pos side] == "black" && $ply < 0 && $ply > $prevPly) || \
+                 ([sc_pos side] == "white" && $ply < 0 && $ply > $prevPly) \
+                     || $::tactics::winWonGame } {
                 return ""
+            } else  {
+                return $::tr(ShorterMateExists)
             }
         } else  {
             # no mate case
@@ -640,11 +643,10 @@ namespace eval tactics {
             if {[ expr abs($prevScore) ] > 3.0 } { set threshold 1.0 }
             if {[ expr abs($prevScore) ] > 5.0 } { set threshold 1.5 }
             # the player moved : score is from opponent side
-            set delta [expr abs($prevScore + $score)]
+            set delta [expr abs($score - $prevScore)]
             if { $delta < $threshold } {
                 return ""
             } else  {
-                if {[sc_pos side] == "black" } { set score [expr 0.0 - $score] }
                 return "$::tr(ScorePlayed) $score\n$::tr(Expected) $prevScore"
             }
         }
@@ -671,6 +673,7 @@ namespace eval tactics {
     ################################################################################
     proc resetValues {} {
         set ::tactics::prevScore 0
+        set ::tactics::prevPly 0
         set ::tactics::prevLine ""
         set ::tactics::nextEngineMove ""
         set ::tactics::matePending 0
