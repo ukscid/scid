@@ -252,9 +252,9 @@ namespace eval tactics {
     #
     ################################################################################
     proc createWin { base } {
-        global ::tactics::analysisEngine
+        global ::tactics::tacticEngine
 
-        set analysisEngine(analyzeMode) 0
+        set tacticEngine(analyzeMode) 0
         if { [::tactics::loadBase $base] } { return }
         if { ! [::engineNoWin::initEngine tacticEngine $::tactics::engineName \
                     [list ::tactics::eng_messages tacticEngine nop]] } {
@@ -308,7 +308,7 @@ namespace eval tactics {
     }
 
     proc ::tactics::eng_messages {id w msg} {
-        global ::tactics::analysisEngine
+        global ::tactics::tacticEngine
         lassign $msg msgType msgData
         switch $msgType {
           "InfoConfig" {
@@ -320,22 +320,22 @@ namespace eval tactics {
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
               if { $multipv == 1 } {
                   if { $score_type ne "mate" } {
-                      set analysisEngine(score) [expr $score / 100.0]
-                      set analysisEngine(mateply) 0
+                      set tacticEngine(score) [expr $score / 100.0]
+                      set tacticEngine(mateply) 0
                   } else {
-                      set analysisEngine(mateply) $score
+                      set tacticEngine(mateply) $score
                       if { $score > 0 } {
-                          set analysisEngine(score) 512.0
+                          set tacticEngine(score) 512.0
                       } else {
-                          set analysisEngine(score) -512.0
+                          set tacticEngine(score) -512.0
                       }
                   }
-                  set analysisEngine(moves) $pv
+                  set tacticEngine(moves) $pv
               }
           }
           "InfoBestMove" {
               lassign $msgData ::tactics::data(bestmove) ponder ::tactics::data(ponder)
-              set ::analysisEngine(move_done) 1
+              set ::tacticEngine(move_done) 1
           }
           "InfoDisconnected" {
               lassign $msgData errorMsg
@@ -377,13 +377,13 @@ namespace eval tactics {
     #
     ################################################################################
     proc toggleSolution {} {
-        global ::tactics::showSolution ::tactics::analysisEngine
+        global ::tactics::showSolution ::tactics::tacticEngine
         set w .tacticsWin
         if {$showSolution} {
-            set pv $analysisEngine(moves)
-            if { $analysisEngine(afterFirstMove) } { set pv [string range $pv 5 end] }
+            set pv $tacticEngine(moves)
+            if { $tacticEngine(afterFirstMove) } { set pv [string range $pv 5 end] }
             set pv [sc_pos coordToSAN [sc_pos fen] $pv]
-            set labelSolution "$analysisEngine(score) : [::trans $pv]"
+            set labelSolution "$tacticEngine(score) : [::trans $pv]"
             $w.lSolution configure -height [expr int([string length $labelSolution]/50)]
             $w.lSolution delete 1.0 end
             $w.lSolution insert end $labelSolution
@@ -450,7 +450,7 @@ namespace eval tactics {
     #
     ################################################################################
     proc loadNextGame {} {
-        global ::tactics::analysisEngine
+        global ::tactics::tacticEngine
         ::tactics::resetValues
         setInfoEngine $::tr(LoadingGame)
 
@@ -483,12 +483,12 @@ namespace eval tactics {
         ::gameclock::reset 1
         ::gameclock::start 1
 
-        set analysisEngine(afterFirstMove) 0
+        set tacticEngine(afterFirstMove) 0
         set ::tactics::prevFen [sc_pos fen]
         ::tactics::startAnalyze
         #needs complement
-        set analysisEngine(score) [expr 0.0 - $analysisEngine(score)]
-        set analysisEngine(mateply) [expr 0 - $analysisEngine(mateply)]
+        set tacticEngine(score) [expr 0.0 - $tacticEngine(score)]
+        set tacticEngine(mateply) [expr 0 - $tacticEngine(mateply)]
         ::tactics::mainLoop
     }
     ################################################################################
@@ -531,7 +531,7 @@ namespace eval tactics {
     # waits for the user to play and check the move played
     ################################################################################
     proc mainLoop {} {
-        global ::tactics::prevScore ::tactics::prevLine ::tactics::prevPly ::tactics::analysisEngine ::tactics::nextEngineMove
+        global ::tactics::prevScore ::tactics::prevLine ::tactics::prevPly ::tactics::tacticEngine ::tactics::nextEngineMove
 
         after cancel ::tactics::mainLoop
 
@@ -553,7 +553,7 @@ namespace eval tactics {
         if { [string index $move_done end] == "#"} { ::tactics::exSolved; return }
 
         # if the engine is still analyzing, wait the end of it
-        if {$analysisEngine(analyzeMode)} { vwait ::tactics::analysisEngine(analyzeMode) }
+        if {$tacticEngine(analyzeMode)} { vwait ::tactics::tacticEngine(analyzeMode) }
 
         if {![winfo exists .tacticsWin]} { return }
 
@@ -563,9 +563,9 @@ namespace eval tactics {
         }
 
         # the player moved and analysis is over : check if his move was as good as expected
-        set prevScore $analysisEngine(score)
-        set prevLine $analysisEngine(moves)
-        set prevPly $analysisEngine(mateply)
+        set prevScore $tacticEngine(score)
+        set prevLine $tacticEngine(moves)
+        set prevPly $tacticEngine(mateply)
         ::tactics::startAnalyze
 
         # now wait for the end of analyzis
@@ -579,15 +579,15 @@ namespace eval tactics {
         if {  $res != ""} {
             tk_messageBox -title "Scid" -icon info -type ok -message "$::tr(BestSolutionNotFound)\n$res"
             # take back last move so restore engine status
-            set analysisEngine(score) $prevScore
-            set analysisEngine(moves) $prevLine
-            set analysisEngine(mateply) $prevPly
+            set tacticEngine(score) $prevScore
+            set tacticEngine(moves) $prevLine
+            set tacticEngine(mateply) $prevPly
             sc_game tags set -site $::tactics::failed
             sc_move back
             updateBoard -pgn
             set ::tactics::prevFen [sc_pos fen]
         } else  {
-            set analysisEngine(afterFirstMove) 1
+            set tacticEngine(afterFirstMove) 1
             catch { sc_move addSan $nextEngineMove }
             set ::tactics::prevFen [sc_pos fen]
             updateBoard -pgn
@@ -607,10 +607,10 @@ namespace eval tactics {
     # - combination's score is close enough (within 0.5 point)
     ################################################################################
     proc foundBestLine {} {
-        global ::tactics::analysisEngine ::tactics::prevScore ::tactics::prevPly ::tactics::prevLine ::tactics::nextEngineMove ::tactics::matePending
-        set score $analysisEngine(score)
-        set line $analysisEngine(moves)
-        set ply $analysisEngine(mateply)
+        global ::tactics::tacticEngine ::tactics::prevScore ::tactics::prevPly ::tactics::prevLine ::tactics::nextEngineMove ::tactics::matePending
+        set score $tacticEngine(score)
+        set line $tacticEngine(moves)
+        set ply $tacticEngine(mateply)
 
         set nextEngineMove [ lindex [ split $line ] 0 ]
 
@@ -697,33 +697,33 @@ namespace eval tactics {
     #   Put the engine in analyze mode
     # ======================================================================
     proc startAnalyze { } {
-        global ::tactics::analysisEngine ::tactics::analysisTime
+        global ::tactics::tacticEngine ::tactics::analysisTime
         setInfoEngine "$::tr(Thinking) ..." PaleVioletRed
 
         # Check that the engine has not already had analyze mode started:
-        if {$analysisEngine(analyzeMode)} {
+        if {$tacticEngine(analyzeMode)} {
             ::engine::send tacticEngine StopGo
         }
 
-        set analysisEngine(analyzeMode) 1
+        set tacticEngine(analyzeMode) 1
         ::engine::send tacticEngine Go [list [sc_game UCI_currentPos] [list "movetime" $::tactics::analysisTime]]
-        vwait ::analysisEngine(move_done)
+        vwait ::tacticEngine(move_done)
         if {[winfo exists .tacticsWin]} {
             setInfoEngine $::tr(AnalyzeDone) PaleGreen3
         }
-        set analysisEngine(analyzeMode) 0
+        set tacticEngine(analyzeMode) 0
     }
     # ======================================================================
     # stopAnalyzeMode:
     #   Stop the engine analyze mode
     # ======================================================================
     proc stopAnalyze { } {
-        global ::tactics::analysisEngine
+        global ::tactics::tacticEngine
         # Check that the engine has already had analyze mode started:
-        if {!$analysisEngine(analyzeMode)} { return }
+        if {!$tacticEngine(analyzeMode)} { return }
 
         ::engine::send tacticEngine StopGo
-        set analysisEngine(analyzeMode) 0
+        set tacticEngine(analyzeMode) 0
         if {[winfo exists .tacticsWin]} {
             setInfoEngine $::tr(AnalyzeDone) PaleGreen3
         }
