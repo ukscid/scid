@@ -380,7 +380,9 @@ namespace eval tactics {
         global ::tactics::showSolution ::tactics::analysisEngine
         set w .tacticsWin
         if {$showSolution} {
-            set pv [sc_pos coordToSAN [sc_pos fen] $analysisEngine(moves)]
+            set pv $analysisEngine(moves)
+            if { $analysisEngine(afterFirstMove) } { set pv [string range $pv 5 end] }
+            set pv [sc_pos coordToSAN [sc_pos fen] $pv]
             set labelSolution "$analysisEngine(score) : [::trans $pv]"
             $w.lSolution configure -height [expr int([string length $labelSolution]/50)]
             $w.lSolution delete 1.0 end
@@ -481,6 +483,7 @@ namespace eval tactics {
         ::gameclock::reset 1
         ::gameclock::start 1
 
+        set analysisEngine(afterFirstMove) 0
         set ::tactics::prevFen [sc_pos fen]
         ::tactics::startAnalyze
         #needs complement
@@ -584,6 +587,7 @@ namespace eval tactics {
             updateBoard -pgn
             set ::tactics::prevFen [sc_pos fen]
         } else  {
+            set analysisEngine(afterFirstMove) 1
             catch { sc_move addSan $nextEngineMove }
             set ::tactics::prevFen [sc_pos fen]
             updateBoard -pgn
