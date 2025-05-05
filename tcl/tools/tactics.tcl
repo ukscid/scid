@@ -23,7 +23,7 @@ namespace eval tactics {
     set tacticData(engineName) ""
     set tacticData(analysisTime) 2000
     # Don't try to find the exact best move but to win a won game (that is a mate in 5 is ok even if there was a pending mate in 2)
-    set winWonGame 0
+    set tacticData(winWonGame) 0
 
     proc getBaseTypeFromFile { fname } {
         set dbType "SCID5"
@@ -283,7 +283,7 @@ namespace eval tactics {
 
         ttk::frame $w.f2
         ttk::checkbutton $w.f2.cbSolution -text $::tr(ShowSolution) -variable ::tactics::tacticData(showSolution) -command ::tactics::toggleSolution
-        ttk::checkbutton $w.f2.cbWinWonGame -text $::tr(WinWonGame) -variable ::tactics::winWonGame
+        ttk::checkbutton $w.f2.cbWinWonGame -text $::tr(WinWonGame) -variable ::tactics::tacticData(winWonGame)
         ttk_text $w.lSolution -style Label -wrap word -relief flat -height 1 -width 40
         pack $w.f2.cbSolution -side left -anchor w
         pack $w.f2.cbWinWonGame -side right -anchor e
@@ -625,7 +625,7 @@ namespace eval tactics {
             # Engine found a mate, look if move is shortes mate
             if { ([sc_pos side] == "black" && $ply < 0 && $ply > $tacticData(prevPly)) || \
                  ([sc_pos side] == "white" && $ply < 0 && $ply > $tacticData(prevPly)) \
-                     || $::tactics::winWonGame } {
+                     || $tacticData(winWonGame) } {
                 return ""
             } else  {
                 return $::tr(ShorterMateExists)
@@ -634,7 +634,7 @@ namespace eval tactics {
             # no mate case
             set tacticData(matePending) 0
             set threshold 0.5
-            if {$::tactics::winWonGame} {
+            if {$tacticData(winWonGame)} {
                 # Only alert when the advantage clearly changes side
                 if {[sc_pos side] == "white" && $tacticData(prevScore) < 0 && $score >= $threshold  || \
                             [sc_pos side] == "black" &&  $tacticData(prevScore) >= 0 && $score < [expr 0 - $threshold]  } {
