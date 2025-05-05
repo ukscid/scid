@@ -152,7 +152,6 @@ namespace eval tactics {
         set fname [$win.s.bases selection]
         $win.fbutton.cancel configure -text [tr Cancel] -command "focus .; destroy $win"
         if {$fname != "" && [$win.s.bases item {*}$fname -tags] != "empty"} {
-#set $w.e.movetime.value get [ expr $::tactics::analysisTime / 1000];
             $win.fbutton.ok configure -state normal \
                 -command "destroy $win; ::tactics::createWin $fname"
             $win.fbutton.reset configure -state normal \
@@ -191,7 +190,8 @@ namespace eval tactics {
 
         ttk::frame $w.e.movetime
         ttk::label $w.e.movetime.l -text "[tr SecondsPerMove]: "
-        ttk::spinbox $w.e.movetime.value -width 3 -from 1 -to 120 -increment 1 -validate all -validatecommand { regexp {^[0-9]+$} %P }
+        ttk::spinbox $w.e.movetime.value -width 3 -from 1 -to 120 -increment 1 -validate all -validatecommand { regexp {^[0-9]+$} %P } \
+            -command { set ::tactics::analysisTime [expr [.configTactics.e.movetime.value get] * 1000] }
         $w.e.movetime.value set [ expr $::tactics::analysisTime / 1000]
         pack $w.e.movetime.l $w.e.movetime.value -side left
         pack $w.e.movetime -side top -anchor w
@@ -619,7 +619,7 @@ namespace eval tactics {
         # Case of mate
         if { $prevPly != 0 } {
             set matePending 1
-            # Engine found a mate, search in how many plies
+            # Engine found a mate, look if move is shortes mate
             if { ([sc_pos side] == "black" && $ply < 0 && $ply > $prevPly) || \
                  ([sc_pos side] == "white" && $ply < 0 && $ply > $prevPly) \
                      || $::tactics::winWonGame } {
@@ -642,7 +642,6 @@ namespace eval tactics {
             }
             if {[ expr abs($prevScore) ] > 3.0 } { set threshold 1.0 }
             if {[ expr abs($prevScore) ] > 5.0 } { set threshold 1.5 }
-            # the player moved : score is from opponent side
             set delta [expr abs($score - $prevScore)]
             if { $delta < $threshold } {
                 return ""
