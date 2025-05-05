@@ -10,18 +10,18 @@
 namespace eval tactics {
 
     set infoEngineLabel ""
-    set solved "problem solved"
-    set failed "problem failed"
-    set prevScore 0
-    set prevPly 0
-    set prevLine ""
-    set nextEngineMove ""
-    set matePending 0
-    set cancelScoreReset 0
-    set showSolution 0
-    set prevFen ""
-    set engineName ""
-    set analysisTime 2000
+    set tacticData(solved) "problem solved"
+    set tacticData(failed) "problem failed"
+    set tacticData(prevScore) 0
+    set tacticData(prevPly) 0
+    set tacticData(prevLine) ""
+    set tacticData(nextEngineMove) ""
+    set tacticData(matePending) 0
+    set tacticData(cancelScoreReset) 0
+    set tacticData(showSolution) 0
+    set tacticData(prevFen) ""
+    set tacticData(engineName) ""
+    set tacticData(analysisTime) 2000
     # Don't try to find the exact best move but to win a won game (that is a mate in 5 is ok even if there was a pending mate in 2)
     set winWonGame 0
 
@@ -72,7 +72,7 @@ namespace eval tactics {
             set err [catch {
                 sc_filter search $baseId $filter header -filter RESET -flag S -flag| T
                 set nTactics [sc_filter count $baseId $filter]
-                sc_filter search $baseId $filter header -filter AND -site "\"$::tactics::solved\""
+                sc_filter search $baseId $filter header -filter AND -site "\"$::tactics::tacticData(solved)\""
                 set solvedCount [sc_filter count $baseId $filter]
 
                 set desc {}
@@ -184,15 +184,15 @@ namespace eval tactics {
 
         #Engine selection
         ttk::labelframe $w.e -text "[tr Engine]:"
-        ::engineNoWin::createEngineOptionsFrame $w tacticEngine ::tactics::engineName 5 ::tactics::eng_messages
+        ::engineNoWin::createEngineOptionsFrame $w tacticEngine ::tactics::tacticData(engineName) 5 ::tactics::eng_messages
         grid $w.e -sticky ws
         pack $w.tacticEngine -in $w.e -side top -pady 5 -anchor w -padx 4
 
         ttk::frame $w.e.movetime
         ttk::label $w.e.movetime.l -text "[tr SecondsPerMove]: "
         ttk::spinbox $w.e.movetime.value -width 3 -from 1 -to 120 -increment 1 -validate all -validatecommand { regexp {^[0-9]+$} %P } \
-            -command { set ::tactics::analysisTime [expr [.configTactics.e.movetime.value get] * 1000] }
-        $w.e.movetime.value set [ expr $::tactics::analysisTime / 1000]
+            -command { set ::tactics::tacticData(analysisTime) [expr [.configTactics.e.movetime.value get] * 1000] }
+        $w.e.movetime.value set [ expr $::tactics::tacticData(analysisTime) / 1000]
         pack $w.e.movetime.l $w.e.movetime.value -side left
         pack $w.e.movetime -side top -anchor w
 
@@ -252,11 +252,11 @@ namespace eval tactics {
     #
     ################################################################################
     proc createWin { base } {
-        global ::tactics::tacticEngine
+        global ::tactics::tacticData
 
-        set tacticEngine(analyzeMode) 0
+        set tacticData(analyzeMode) 0
         if { [::tactics::loadBase $base] } { return }
-        if { ! [::engineNoWin::initEngine tacticEngine $::tactics::engineName \
+        if { ! [::engineNoWin::initEngine tacticEngine $tacticData(engineName) \
                     [list ::tactics::eng_messages tacticEngine nop]] } {
             return
         }
@@ -282,7 +282,7 @@ namespace eval tactics {
         pack $w.fclock.time $w.fclock.l -side right -fill x
 
         ttk::frame $w.f2
-        ttk::checkbutton $w.f2.cbSolution -text $::tr(ShowSolution) -variable ::tactics::showSolution -command ::tactics::toggleSolution
+        ttk::checkbutton $w.f2.cbSolution -text $::tr(ShowSolution) -variable ::tactics::tacticData(showSolution) -command ::tactics::toggleSolution
         ttk::checkbutton $w.f2.cbWinWonGame -text $::tr(WinWonGame) -variable ::tactics::winWonGame
         ttk_text $w.lSolution -style Label -wrap word -relief flat -height 1 -width 40
         pack $w.f2.cbSolution -side left -anchor w
@@ -308,7 +308,7 @@ namespace eval tactics {
     }
 
     proc ::tactics::eng_messages {id w msg} {
-        global ::tactics::tacticEngine
+        global ::tactics::tacticData
         lassign $msg msgType msgData
         switch $msgType {
           "InfoConfig" {
@@ -320,22 +320,22 @@ namespace eval tactics {
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
               if { $multipv == 1 } {
                   if { $score_type ne "mate" } {
-                      set tacticEngine(score) [expr $score / 100.0]
-                      set tacticEngine(mateply) 0
+                      set tacticData(score) [expr $score / 100.0]
+                      set tacticData(mateply) 0
                   } else {
-                      set tacticEngine(mateply) $score
+                      set tacticData(mateply) $score
                       if { $score > 0 } {
-                          set tacticEngine(score) 512.0
+                          set tacticData(score) 512.0
                       } else {
-                          set tacticEngine(score) -512.0
+                          set tacticData(score) -512.0
                       }
                   }
-                  set tacticEngine(moves) $pv
+                  set tacticData(moves) $pv
               }
           }
           "InfoBestMove" {
-              lassign $msgData ::tactics::data(bestmove) ponder ::tactics::data(ponder)
-              set ::tacticEngine(move_done) 1
+              lassign $msgData tacticData(bestmove) ponder tacticData(ponder)
+              set ::tacticData(move_done) 1
           }
           "InfoDisconnected" {
               lassign $msgData errorMsg
@@ -377,13 +377,13 @@ namespace eval tactics {
     #
     ################################################################################
     proc toggleSolution {} {
-        global ::tactics::showSolution ::tactics::tacticEngine
+        global ::tactics::tacticData
         set w .tacticsWin
-        if {$showSolution} {
-            set pv $tacticEngine(moves)
-            if { $tacticEngine(afterFirstMove) } { set pv [string range $pv 5 end] }
+        if {$tacticData(showSolution)} {
+            set pv $tacticData(moves)
+            if { $tacticData(afterFirstMove) } { set pv [string range $pv 5 end] }
             set pv [sc_pos coordToSAN [sc_pos fen] $pv]
-            set labelSolution "$tacticEngine(score) : [::trans $pv]"
+            set labelSolution "$tacticData(score) : [::trans $pv]"
             $w.lSolution configure -height [expr int([string length $labelSolution]/50)]
             $w.lSolution delete 1.0 end
             $w.lSolution insert end $labelSolution
@@ -396,7 +396,7 @@ namespace eval tactics {
     #
     ################################################################################
     proc resetScores {fname} {
-        global ::tactics::cancelScoreReset
+        global ::tactics::tacticData
 
         set prevBase [sc_base current]
         set baseId [sc_base slot $fname]
@@ -413,13 +413,13 @@ namespace eval tactics {
             set wasOpened 1
         }
         set filter [sc_filter new $baseId]
-        sc_filter search $baseId $filter header -filter RESET -site "\"$::tactics::solved\""
+        sc_filter search $baseId $filter header -filter RESET -site "\"$tacticData(solved)\""
 
         #reset site tag for each game
         set numGames [sc_filter count $baseId $filter]
-        set cancelScoreReset 0
-        progressWindow "Scid" $::tr(ResettingScore) $::tr(Cancel) "set ::tactics::cancelScoreReset 1"
-        for {set g 0} {$g < $numGames && $cancelScoreReset == 0} {incr g 100} {
+        set tacticData(cancelScoreReset) 0
+        progressWindow "Scid" $::tr(ResettingScore) $::tr(Cancel) "set tacticData(cancelScoreReset) 1"
+        for {set g 0} {$g < $numGames && $tacticData(cancelScoreReset) == 0} {incr g 100} {
             updateProgressWindow $g $numGames
 
             foreach {idx line deleted} [sc_base gameslist $baseId $g 100 $filter N+] {
@@ -450,7 +450,7 @@ namespace eval tactics {
     #
     ################################################################################
     proc loadNextGame {} {
-        global ::tactics::tacticEngine
+        global ::tactics::tacticData
         ::tactics::resetValues
         setInfoEngine $::tr(LoadingGame)
 
@@ -483,12 +483,12 @@ namespace eval tactics {
         ::gameclock::reset 1
         ::gameclock::start 1
 
-        set tacticEngine(afterFirstMove) 0
-        set ::tactics::prevFen [sc_pos fen]
+        set tacticData(afterFirstMove) 0
+        set ::tactics::tacticData(prevFen) [sc_pos fen]
         ::tactics::startAnalyze
         #needs complement
-        set tacticEngine(score) [expr 0.0 - $tacticEngine(score)]
-        set tacticEngine(mateply) [expr 0 - $tacticEngine(mateply)]
+        set tacticData(score) [expr 0.0 - $tacticData(score)]
+        set tacticData(mateply) [expr 0 - $tacticData(mateply)]
         ::tactics::mainLoop
     }
     ################################################################################
@@ -507,7 +507,7 @@ namespace eval tactics {
         ::tactics::stopAnalyze
         ::gameclock::stop 1
         tk_messageBox -title "Scid" -icon info -type ok -message $::tr(MateFound)
-        sc_game tags set -site $::tactics::solved
+        sc_game tags set -site $::tactics::tacticData(solved)
         sc_game save [sc_game number]
         ::tactics::loadNextGame
     }
@@ -523,7 +523,7 @@ namespace eval tactics {
         if { [sc_pos side] == "white" && [::board::isFlipped .main.board] || [sc_pos side] == "black" &&  ![::board::isFlipped .main.board] } {
             ::board::flip .main.board
         }
-        set ::tactics::prevFen [sc_pos fen]
+        set ::tactics::tacticData(prevFen) [sc_pos fen]
         ::tactics::startAnalyze
         ::tactics::mainLoop
     }
@@ -531,11 +531,11 @@ namespace eval tactics {
     # waits for the user to play and check the move played
     ################################################################################
     proc mainLoop {} {
-        global ::tactics::prevScore ::tactics::prevLine ::tactics::prevPly ::tactics::tacticEngine ::tactics::nextEngineMove
+        global ::tactics::tacticData
 
         after cancel ::tactics::mainLoop
 
-        if {[sc_pos fen] != $::tactics::prevFen && [sc_pos isAt start]} {
+        if {[sc_pos fen] != $::tactics::tacticData(prevFen) && [sc_pos isAt start]} {
             ::tactics::abnormalContinuation
             return
         }
@@ -546,30 +546,30 @@ namespace eval tactics {
             return
         }
 
-        set ::tactics::prevFen [sc_pos fen]
+        set ::tactics::tacticData(prevFen) [sc_pos fen]
 
         # check if player's move is a direct mate : no need to wait for engine analysis in this case
         set move_done [sc_game info previousMove]
         if { [string index $move_done end] == "#"} { ::tactics::exSolved; return }
 
         # if the engine is still analyzing, wait the end of it
-        if {$tacticEngine(analyzeMode)} { vwait ::tactics::tacticEngine(analyzeMode) }
+        if {$tacticData(analyzeMode)} { vwait ::tactics::tacticData(analyzeMode) }
 
         if {![winfo exists .tacticsWin]} { return }
 
-        if {[sc_pos fen] != $::tactics::prevFen  && [sc_pos isAt start]} {
+        if {[sc_pos fen] != $::tactics::tacticData(prevFen)  && [sc_pos isAt start]} {
             ::tactics::abnormalContinuation
             return
         }
 
         # the player moved and analysis is over : check if his move was as good as expected
-        set prevScore $tacticEngine(score)
-        set prevLine $tacticEngine(moves)
-        set prevPly $tacticEngine(mateply)
+        set tacticData(prevScore) $tacticData(score)
+        set tacticData(prevLine) $tacticData(moves)
+        set tacticData(prevPly) $tacticData(mateply)
         ::tactics::startAnalyze
 
         # now wait for the end of analyzis
-        if {[sc_pos fen] != $::tactics::prevFen  && [sc_pos isAt start]} {
+        if {[sc_pos fen] != $::tactics::tacticData(prevFen)  && [sc_pos isAt start]} {
             ::tactics::abnormalContinuation
             return
         }
@@ -579,21 +579,21 @@ namespace eval tactics {
         if {  $res != ""} {
             tk_messageBox -title "Scid" -icon info -type ok -message "$::tr(BestSolutionNotFound)\n$res"
             # take back last move so restore engine status
-            set tacticEngine(score) $prevScore
-            set tacticEngine(moves) $prevLine
-            set tacticEngine(mateply) $prevPly
-            sc_game tags set -site $::tactics::failed
+            set tacticData(score) $tacticData(prevScore)
+            set tacticData(moves) $tacticData(prevLine)
+            set tacticData(mateply) $tacticData(prevPly)
+            sc_game tags set -site $tacticData(failed)
             sc_move back
             updateBoard -pgn
-            set ::tactics::prevFen [sc_pos fen]
+            set ::tactics::tacticData(prevFen) [sc_pos fen]
         } else  {
-            set tacticEngine(afterFirstMove) 1
-            catch { sc_move addSan $nextEngineMove }
-            set ::tactics::prevFen [sc_pos fen]
+            set tacticData(afterFirstMove) 1
+            catch { sc_move addSan $tacticData(nextEngineMove) }
+            set ::tactics::tacticData(prevFen) [sc_pos fen]
             updateBoard -pgn
-            if { ! $::tactics::matePending } {
+            if { ! $::tactics::tacticData(matePending) } {
                 setInfoEngine $::tr(GoodMove) green
-                sc_game tags set -site $::tactics::solved
+                sc_game tags set -site $tacticData(solved)
                 sc_game save [sc_game number]
             }
         }
@@ -607,25 +607,24 @@ namespace eval tactics {
     # - combination's score is close enough (within 0.5 point)
     ################################################################################
     proc foundBestLine {} {
-        global ::tactics::tacticEngine ::tactics::prevScore ::tactics::prevPly ::tactics::prevLine ::tactics::nextEngineMove ::tactics::matePending
-        set score $tacticEngine(score)
-        set line $tacticEngine(moves)
-        set ply $tacticEngine(mateply)
+        global ::tactics::tacticData
+        set score $tacticData(score)
+        set ply $tacticData(mateply)
 
-        set nextEngineMove [ lindex [ split $line ] 0 ]
+        set tacticData(nextEngineMove) [ lindex [ split $tacticData(moves) ] 0 ]
 
         # check if the player played the same move predicted by engine
-        set prevBestMove [ lindex [ split $prevLine ] 1 ]
+        set prevBestMove [ lindex [ split $tacticData(prevLine) ] 1 ]
         if { [sc_game info previousMoveUCI] == $prevBestMove} {
             return ""
         }
 
         # Case of mate
-        if { $prevPly != 0 } {
-            set matePending 1
+        if { $tacticData(prevPly) != 0 } {
+            set tacticData(matePending) 1
             # Engine found a mate, look if move is shortes mate
-            if { ([sc_pos side] == "black" && $ply < 0 && $ply > $prevPly) || \
-                 ([sc_pos side] == "white" && $ply < 0 && $ply > $prevPly) \
+            if { ([sc_pos side] == "black" && $ply < 0 && $ply > $tacticData(prevPly)) || \
+                 ([sc_pos side] == "white" && $ply < 0 && $ply > $tacticData(prevPly)) \
                      || $::tactics::winWonGame } {
                 return ""
             } else  {
@@ -633,24 +632,24 @@ namespace eval tactics {
             }
         } else  {
             # no mate case
-            set matePending 0
+            set tacticData(matePending) 0
             set threshold 0.5
             if {$::tactics::winWonGame} {
                 # Only alert when the advantage clearly changes side
-                if {[sc_pos side] == "white" && $prevScore < 0 && $score >= $threshold  || \
-                            [sc_pos side] == "black" &&  $prevScore >= 0 && $score < [expr 0 - $threshold]  } {
-                    return "$::tr(ScorePlayed) $score\n$::tr(Expected) $prevScore"
+                if {[sc_pos side] == "white" && $tacticData(prevScore) < 0 && $score >= $threshold  || \
+                            [sc_pos side] == "black" &&  $tacticData(prevScore) >= 0 && $score < [expr 0 - $threshold]  } {
+                    return "$::tr(ScorePlayed) $score\n$::tr(Expected) $tacticData(prevScore)"
                 } else  {
                     return ""
                 }
             }
-            if {[ expr abs($prevScore) ] > 3.0 } { set threshold 1.0 }
-            if {[ expr abs($prevScore) ] > 5.0 } { set threshold 1.5 }
-            set delta [expr abs($score - $prevScore)]
+            if {[ expr abs($tacticData(prevScore)) ] > 3.0 } { set threshold 1.0 }
+            if {[ expr abs($tacticData(prevScore)) ] > 5.0 } { set threshold 1.5 }
+            set delta [expr abs($score - $tacticData(prevScore))]
             if { $delta < $threshold } {
                 return ""
             } else  {
-                return "$::tr(ScorePlayed) $score\n$::tr(Expected) $prevScore"
+                return "$::tr(ScorePlayed) $score\n$::tr(Expected) $tacticData(prevScore)"
             }
         }
     }
@@ -666,7 +665,7 @@ namespace eval tactics {
         #TODO:
         #set filter [sc_filter new $baseId]
         set filter dbfilter
-        sc_filter search $baseId $filter header -filter RESET -flag S -flag| T -site! "\"$::tactics::solved\""
+        sc_filter search $baseId $filter header -filter RESET -flag S -flag| T -site! "\"$::tactics::tacticData(solved)\""
         ::notify::filter $baseId $filter
         return 0
     }
@@ -675,13 +674,13 @@ namespace eval tactics {
     #   Resets global data.
     ################################################################################
     proc resetValues {} {
-        set ::tactics::prevScore 0
-        set ::tactics::prevPly 0
-        set ::tactics::prevLine ""
-        set ::tactics::nextEngineMove ""
-        set ::tactics::matePending 0
-        set ::tactics::showSolution 0
-        set ::tactics::prevFen ""
+        set ::tactics::tacticData(prevScore) 0
+        set ::tactics::tacticData(prevPly) 0
+        set ::tactics::tacticData(prevLine) ""
+        set ::tactics::tacticData(nextEngineMove) ""
+        set ::tactics::tacticData(matePending) 0
+        set ::tactics::tacticData(showSolution) 0
+        set ::tactics::tacticData(prevFen) ""
         toggleSolution
     }
     ################################################################################
@@ -697,33 +696,33 @@ namespace eval tactics {
     #   Put the engine in analyze mode
     # ======================================================================
     proc startAnalyze { } {
-        global ::tactics::tacticEngine ::tactics::analysisTime
+        global ::tactics::tacticData
         setInfoEngine "$::tr(Thinking) ..." PaleVioletRed
 
         # Check that the engine has not already had analyze mode started:
-        if {$tacticEngine(analyzeMode)} {
+        if {$tacticData(analyzeMode)} {
             ::engine::send tacticEngine StopGo
         }
 
-        set tacticEngine(analyzeMode) 1
-        ::engine::send tacticEngine Go [list [sc_game UCI_currentPos] [list "movetime" $::tactics::analysisTime]]
-        vwait ::tacticEngine(move_done)
+        set tacticData(analyzeMode) 1
+        ::engine::send tacticEngine Go [list [sc_game UCI_currentPos] [list "movetime" $tacticData(analysisTime)]]
+        vwait ::tacticData(move_done)
         if {[winfo exists .tacticsWin]} {
             setInfoEngine $::tr(AnalyzeDone) PaleGreen3
         }
-        set tacticEngine(analyzeMode) 0
+        set tacticData(analyzeMode) 0
     }
     # ======================================================================
     # stopAnalyzeMode:
     #   Stop the engine analyze mode
     # ======================================================================
     proc stopAnalyze { } {
-        global ::tactics::tacticEngine
+        global ::tactics::tacticData
         # Check that the engine has already had analyze mode started:
-        if {!$tacticEngine(analyzeMode)} { return }
+        if {!$tacticData(analyzeMode)} { return }
 
         ::engine::send tacticEngine StopGo
-        set tacticEngine(analyzeMode) 0
+        set tacticData(analyzeMode) 0
         if {[winfo exists .tacticsWin]} {
             setInfoEngine $::tr(AnalyzeDone) PaleGreen3
         }
