@@ -9,11 +9,11 @@
 
 namespace eval tactics {
 
-    set infoEngineLabel ""
+    set tacticData(infoEngineLabel) ""
     set tacticData(solved) "problem solved"
     set tacticData(failed) "problem failed"
     set tacticData(prevScore) 0
-    set tacticData(prevPly) 0
+    set tacticData(prevMate) 0
     set tacticData(prevLine) ""
     set tacticData(nextEngineMove) ""
     set tacticData(matePending) 0
@@ -270,7 +270,7 @@ namespace eval tactics {
         # because sometimes the 2 buttons at the bottom are hidden
         wm minsize $w 170 170
         ttk::frame $w.f1
-        ttk::label $w.f1.labelInfo -textvariable ::tactics::infoEngineLabel
+        ttk::label $w.f1.labelInfo -textvariable ::tactics::tacticData(infoEngineLabel)
         pack $w.f1.labelInfo -side top  -fill x
 
         ttk::frame $w.fclock
@@ -319,6 +319,7 @@ namespace eval tactics {
           "InfoPV" {
               lassign $msgData multipv depth seldepth nodes nps hashfull tbhits time score score_type score_wdl pv
               if { $multipv == 1 } {
+                  if { [sc_pos side] == "black" } { set score [expr 0 - $score] }
                   if { $score_type ne "mate" } {
                       set tacticData(score) [expr $score / 100.0]
                       set tacticData(mateply) 0
@@ -381,9 +382,16 @@ namespace eval tactics {
         set w .tacticsWin
         if {$tacticData(showSolution)} {
             set pv $tacticData(moves)
-            if { $tacticData(afterFirstMove) } { set pv [string range $pv 5 end] }
+            set score "$tacticData(score)"
+            if { $tacticData(afterFirstMove) } {
+                set pv [string range $pv 5 end]
+                set score [expr 0.0 - $score]
+            }
             set pv [sc_pos coordToSAN [sc_pos fen] $pv]
-            set labelSolution "$tacticData(score) : [::trans $pv]"
+            if { $tacticData(mateply) ne 0 } {
+                set score "Mate [expr abs($tacticData(mateply))]"
+            }
+            set labelSolution "$score : [::trans $pv]"
             $w.lSolution configure -height [expr int([string length $labelSolution]/50)]
             $w.lSolution delete 1.0 end
             $w.lSolution insert end $labelSolution
@@ -486,9 +494,6 @@ namespace eval tactics {
         set tacticData(afterFirstMove) 0
         set ::tactics::tacticData(prevFen) [sc_pos fen]
         ::tactics::startAnalyze
-        #needs complement
-        set tacticData(score) [expr 0.0 - $tacticData(score)]
-        set tacticData(mateply) [expr 0 - $tacticData(mateply)]
         ::tactics::mainLoop
     }
     ################################################################################
@@ -565,7 +570,7 @@ namespace eval tactics {
         # the player moved and analysis is over : check if his move was as good as expected
         set tacticData(prevScore) $tacticData(score)
         set tacticData(prevLine) $tacticData(moves)
-        set tacticData(prevPly) $tacticData(mateply)
+        set tacticData(prevMate) $tacticData(mateply)
         ::tactics::startAnalyze
 
         # now wait for the end of analyzis
@@ -581,7 +586,7 @@ namespace eval tactics {
             # take back last move so restore engine status
             set tacticData(score) $tacticData(prevScore)
             set tacticData(moves) $tacticData(prevLine)
-            set tacticData(mateply) $tacticData(prevPly)
+            set tacticData(mateply) $tacticData(prevMate)
             sc_game tags set -site $tacticData(failed)
             sc_move back
             updateBoard -pgn
@@ -609,9 +614,10 @@ namespace eval tactics {
     proc foundBestLine {} {
         global ::tactics::tacticData
         set score $tacticData(score)
-        set ply $tacticData(mateply)
+        set mate $tacticData(mateply)
 
         set tacticData(nextEngineMove) [ lindex [ split $tacticData(moves) ] 0 ]
+
 
         # check if the player played the same move predicted by engine
         set prevBestMove [ lindex [ split $tacticData(prevLine) ] 1 ]
@@ -619,12 +625,13 @@ namespace eval tactics {
             return ""
         }
 
+        set side [sc_pos side]
         # Case of mate
-        if { $tacticData(prevPly) != 0 } {
+        if { $tacticData(prevMate) != 0 } {
             set tacticData(matePending) 1
-            # Engine found a mate, look if move is shortes mate
-            if { ([sc_pos side] == "black" && $ply < 0 && $ply > $tacticData(prevPly)) || \
-                 ([sc_pos side] == "white" && $ply < 0 && $ply > $tacticData(prevPly)) \
+            # Engine found a mate, look if move is shortest mate
+            if { ($side == "black" && $mate > 0 && $mate < $tacticData(prevMate)) || \
+                 ($side == "white" && $mate < 0 && $mate > $tacticData(prevMate)) \
                      || $tacticData(winWonGame) } {
                 return ""
             } else  {
@@ -645,8 +652,8 @@ namespace eval tactics {
             }
             if {[ expr abs($tacticData(prevScore)) ] > 3.0 } { set threshold 1.0 }
             if {[ expr abs($tacticData(prevScore)) ] > 5.0 } { set threshold 1.5 }
-            set delta [expr abs($score - $tacticData(prevScore))]
-            if { $delta < $threshold } {
+            set delta [expr $score - $tacticData(prevScore)]
+            if { ($side == "white" && $delta < $threshold) || ($side == "black" && $delta > [expr 0 - $threshold])} {
                 return ""
             } else  {
                 return "$::tr(ScorePlayed) $score\n$::tr(Expected) $tacticData(prevScore)"
@@ -675,7 +682,7 @@ namespace eval tactics {
     ################################################################################
     proc resetValues {} {
         set ::tactics::tacticData(prevScore) 0
-        set ::tactics::tacticData(prevPly) 0
+        set ::tactics::tacticData(prevMate) 0
         set ::tactics::tacticData(prevLine) ""
         set ::tactics::tacticData(nextEngineMove) ""
         set ::tactics::tacticData(matePending) 0
@@ -686,8 +693,8 @@ namespace eval tactics {
     ################################################################################
     #
     ################################################################################
-    proc setInfoEngine { s { color linen } } {
-        set ::tactics::infoEngineLabel $s
+    proc setInfoEngine { s { color gray80 } } {
+        set ::tactics::tacticData(infoEngineLabel) $s
         .tacticsWin.f1.labelInfo configure -background $color
     }
 
