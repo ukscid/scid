@@ -282,7 +282,7 @@ namespace eval tactics {
         pack $w.fclock.time $w.fclock.l -side right -fill x
 
         ttk::frame $w.f2
-        ttk::checkbutton $w.f2.cbSolution -text $::tr(ShowSolution) -variable ::tactics::tacticData(showSolution) -command ::tactics::toggleSolution
+        ttk::checkbutton $w.f2.cbSolution -text $::tr(ShowSolution) -variable ::tactics::tacticData(showSolution) -command ::tactics::updateSolution
         ttk::checkbutton $w.f2.cbWinWonGame -text $::tr(WinWonGame) -variable ::tactics::tacticData(winWonGame)
         ttk_text $w.lSolution -style Label -wrap word -relief flat -height 1 -width 40
         pack $w.f2.cbSolution -side left -anchor w
@@ -377,20 +377,20 @@ namespace eval tactics {
     ################################################################################
     #
     ################################################################################
-    proc toggleSolution {} {
+    proc updateSolution {} {
         global ::tactics::tacticData
         set w .tacticsWin
         if {$tacticData(showSolution)} {
+            if { $tacticData(mateply) ne 0 } {
+                set score "Mate $tacticData(mateply)"
+            } else {
+                set score "$tacticData(score)"
+            }
             set pv $tacticData(moves)
-            set score "$tacticData(score)"
             if { $tacticData(afterFirstMove) } {
                 set pv [string range $pv 5 end]
-                set score [expr 0.0 - $score]
             }
-            set pv [sc_pos coordToSAN [sc_pos fen] $pv]
-            if { $tacticData(mateply) ne 0 } {
-                set score "Mate [expr abs($tacticData(mateply))]"
-            }
+            set pv [sc_pos coordToSAN $tacticData(prevFen) $pv]
             set labelSolution "$score : [::trans $pv]"
             $w.lSolution configure -height [expr int([string length $labelSolution]/50)]
             $w.lSolution delete 1.0 end
@@ -595,6 +595,7 @@ namespace eval tactics {
             set tacticData(afterFirstMove) 1
             catch { sc_move addSan $tacticData(nextEngineMove) }
             set ::tactics::tacticData(prevFen) [sc_pos fen]
+            updateSolution
             updateBoard -pgn
             if { ! $::tactics::tacticData(matePending) } {
                 setInfoEngine $::tr(GoodMove) green
@@ -688,7 +689,7 @@ namespace eval tactics {
         set ::tactics::tacticData(matePending) 0
         set ::tactics::tacticData(showSolution) 0
         set ::tactics::tacticData(prevFen) ""
-        toggleSolution
+        updateSolution
     }
     ################################################################################
     #
