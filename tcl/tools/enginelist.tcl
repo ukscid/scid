@@ -273,12 +273,12 @@ proc ::enginelist::edit {index} {
 
     if {$index >= 0 } {
         set e [lindex $engines(list) $index]
-        set newengine 0
+        set engines(newEngine) 0
     } else {
         set name [::enginecfg::dlgNewLocal]
         if { $name eq ""} { return }
         set index [expr [llength $engines(list)] - 1]
-        set newengine 1
+        set engines(newEngine) 1
         set e [lindex $engines(list) $index]
         lset e 3 .
     }
@@ -292,7 +292,7 @@ proc ::enginelist::edit {index} {
     set engines(newTime) [lindex $e 5]
     set engines(newURL) [lindex $e 6]
     set engines(newUCI) [lindex $e 7]
-    set ::uci::newOptions [lindex $e 8]
+    set engines(newOptions) [lindex $e 8]
 
     set engines(newDate) $::tr(None)
     if {$engines(newTime) > 0 } {
@@ -321,7 +321,7 @@ proc ::enginelist::edit {index} {
             pack forget $w.editEngine.eng
             $w.optseditEngine.text configure -height 24
             grid $w.editEngine -in $f -column 2 -row $row
-            if { $newengine } { $w.editEngine.opts invoke }
+            if { $engines(newEngine) } { $w.editEngine.opts invoke }
         }
         # Browse button for choosing an executable file:
         if {$i == "Cmd"} {
@@ -405,7 +405,7 @@ proc ::enginelist::edit {index} {
             set newEntry [list $engines(newName) $engines(newCmd) \
                     $engines(newArgs) $engines(newDir) \
                     $engines(newElo) $engines(newTime) \
-                    $engines(newURL) $engines(newUCI) $::uci::newOptions ]
+                    $engines(newURL) $engines(newUCI) $engines(newOptions) ]
             set engines(list) [lreplace $engines(list) $engines(newIndex) $engines(newIndex) $newEntry]
             ::engineNoWin::saveEngineSetup editEngine
             ::enginelist::sort
@@ -413,7 +413,7 @@ proc ::enginelist::edit {index} {
             destroy .engineEdit
         }
     }
-    if { $newengine } {
+    if { $engines(newEngine) } {
         set command "set ::engines(list) \"[lreplace $::engines(list) $index $index]\"
             ::enginelist::sort
             ::enginecfg::write
@@ -440,6 +440,9 @@ proc ::enginelist::edit {index} {
         switch $msgType {
             "InfoConfig" {
                 set msgData [lindex $msgData 2]
+                if {$::engines(newEngine) && [set idx [lsearch -index 0 $msgData "myname"]] >=0} {
+                    set ::engines(newName) [lindex $msgData $idx 1]
+                }
                 ::engineNoWin::initEngineOptions $id $w $msgData
             }
             "InfoDisconnected" {
