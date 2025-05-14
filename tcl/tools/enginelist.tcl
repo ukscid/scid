@@ -317,7 +317,7 @@ proc ::enginelist::edit {index} {
         grid $f.e$i -row $row -column 1 -sticky we
 
         if {$i == "Name"} {
-            ::engineNoWin::createEngineOptionsFrame $w editEngine ::engines(newName) 4 ::enginelist::eng_messages
+            ::engineNoWin::createEngineOptionsFrame $w editEngine ::engines(newName) 4 ::enginelist::eng_messages all
             pack forget $w.editEngine.eng
             $w.optseditEngine.text configure -height 24
             grid $w.editEngine -in $f -column 2 -row $row
