@@ -196,13 +196,13 @@ proc ::reviewgame::endTraining {} {
   after cancel ::reviewgame::mainLoop
   set ::reviewgame::bailout 1
   set ::reviewgame::sequence 0
+  unset -nocomplain ::enginewin::engConfig_reviewEngine
+  ::engine::close reviewEngine
   focus .
   bind $w <Destroy> {}
   ::win::closeWindow $w
   ::setPlayMode ""
-  ::engine::close reviewEngine
   set ::showVarPopup $::reviewgame::showVarPopupSave
-  unset ::enginewin::engConfig_reviewEngine
 }
 ################################################################################
 #
