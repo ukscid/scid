@@ -746,6 +746,7 @@ tools/pinfo.tcl
 tools/analysis.tcl
 tools/annotate.tcl
 tools/finishgame.tcl
+tools/enginelist.tcl
 tools/wbdetect.tcl
 tools/graphs.tcl
 tools/ptracker.tcl
