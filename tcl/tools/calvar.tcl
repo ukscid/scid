@@ -7,8 +7,6 @@
 ################################################################################
 
 namespace eval calvar {
-  # DEBUG
-  set ::uci::uciInfo(log_stdout4) 0
 
   set thinkingTimePerLine 3
   set thinkingTimePosition 10
