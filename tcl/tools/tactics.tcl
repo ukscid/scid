@@ -185,8 +185,8 @@ namespace eval tactics {
         #Engine selection
         ttk::labelframe $w.e -text "[tr Engine]:"
         ::engineNoWin::createEngineOptionsFrame $w tacticEngine ::tactics::tacticData(engineName) 5 ::tactics::eng_messages
-        grid $w.e -sticky ws
-        pack $w.tacticEngine -in $w.e -side top -pady 5 -anchor w -padx 4
+        grid $w.e -sticky we
+        pack $w.tacticEngine -in $w.e -side left -pady 5 -anchor w -padx 4
 
         ttk::frame $w.e.movetime
         ttk::label $w.e.movetime.l -text "[tr SecondsPerMove]: "
@@ -194,18 +194,16 @@ namespace eval tactics {
             -command { set ::tactics::tacticData(analysisTime) [expr [.configTactics.e.movetime.value get] * 1000] }
         $w.e.movetime.value set [ expr $::tactics::tacticData(analysisTime) / 1000]
         pack $w.e.movetime.l $w.e.movetime.value -side left
-        pack $w.e.movetime -side top -anchor w
+        pack $w.e.movetime -side left -anchor e -padx 10
 
         #BaseDir selection
-        grid [ttk::frame $w.sep2 -height 20] -sticky nwes
-        grid [ttk::frame $w.d] -sticky news
+        grid [ttk::frame $w.d] -sticky news -pady {12 4}
         ttk::label $w.d.lbl -font font_Bold -text "[tr ChooseTrainingBase]:"
-        grid $w.d.lbl -sticky w -columnspan 3
-        grid columnconfigure $w.d 1 -weight 1
         ttk::button $w.d.selectDir -text "..." -command "getTacticsBasesDir $w.d.basedir; ::tactics::configValidDir $w"
         ttk::entry $w.d.basedir -textvariable scidBasesDir  -width 30
         ttk::button $w.d.search -text [tr Search]
-        grid $w.d.basedir $w.d.selectDir $w.d.search -sticky w -padx "5 0"
+        pack $w.d.lbl $w.d.basedir $w.d.selectDir -side left -padx "0 5"
+        pack $w.d.search -side right -padx "5 0"
 
 
         #Base selection
