@@ -363,8 +363,7 @@ namespace eval tactics {
         #TODO:
         #sc_filter release $::tactics::baseId $::tactics::filter
         sc_filter reset $::tactics::baseId dbfilter full
-        unset ::enginewin::engConfig_tacticEngine
-        ::engine::close tacticEngine
+        ::engineNoWin::closeEngine tacticEngine
         ::gameclock::stop 1
 
         ::setPlayMode ""
