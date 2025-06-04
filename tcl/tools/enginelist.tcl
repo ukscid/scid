@@ -435,18 +435,19 @@ proc ::enginelist::edit {index} {
     wm resizable $w 1 0
     catch {grab $w}
 }
-    proc ::enginelist::eng_messages {id w msg} {
-        lassign $msg msgType msgData
-        switch $msgType {
-            "InfoConfig" {
-                set msgData [lindex $msgData 2]
-                if {$::engines(newEngine) && [set idx [lsearch -index 0 $msgData "myname"]] >=0} {
-                    set ::engines(newName) [lindex $msgData $idx 1]
-                }
-                ::engineNoWin::initEngineOptions $id $w $msgData
+
+proc ::enginelist::eng_messages {id w msg} {
+    lassign $msg msgType msgData
+    switch $msgType {
+        "InfoConfig" {
+            set msgData [lindex $msgData 2]
+            if {$::engines(newEngine) && [set idx [lsearch -index 0 $msgData "myname"]] >=0} {
+                set ::engines(newName) [lindex $msgData $idx 1]
             }
-            "InfoDisconnected" {
-                ::engineNoWin::disconnected $id $msgData
-            }
+            ::engineNoWin::initEngineOptions $id $w $msgData
+        }
+        "InfoDisconnected" {
+            ::engineNoWin::disconnected $id $msgData
         }
     }
+}
