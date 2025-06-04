@@ -209,8 +209,7 @@ namespace eval calvar {
   ################################################################################
   proc stop { } {
     after cancel $::calvar::afterIdLine
-    ::engine::close calvarEngine
-    unset ::enginewin::engConfig_calvarEngine
+    ::engineNoWin::closeEngine calvarEngine
     focus .
     destroy .calvarWin
     set ::suggestMoves $::calvar::suggestMoves_old
