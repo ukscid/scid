@@ -196,8 +196,7 @@ proc ::reviewgame::endTraining {} {
   after cancel ::reviewgame::mainLoop
   set ::reviewgame::bailout 1
   set ::reviewgame::sequence 0
-  unset -nocomplain ::enginewin::engConfig_reviewEngine
-  ::engine::close reviewEngine
+  ::engineNoWin::closeEngine reviewEngine
   focus .
   bind $w <Destroy> {}
   ::win::closeWindow $w
